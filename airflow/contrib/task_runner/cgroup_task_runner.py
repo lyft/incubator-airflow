@@ -110,7 +110,7 @@ class CgroupTaskRunner(BaseTaskRunner):
         # node is now the leaf node
         parent = node.parent
         self.log.debug("Deleting cgroup %s/%s", parent, node.name)
-        parent.delete_cgroup(node.name)
+        parent.delete_cgroup(node.name.decode())
 
     def start(self):
         # Use bash if it's already in a cgroup
