@@ -75,7 +75,7 @@ class CgroupTaskRunner(BaseTaskRunner):
         node = trees.Tree().root
         path_split = path.split(os.sep)
         for path_element in path_split:
-            name_to_node = {x.name: x for x in node.children}
+            name_to_node = {x.name.decode(): x for x in node.children}
             self.log.debug("name_to_node: {}".format(name_to_node))
             self.log.debug("path_element: {}".format(path_element))
             if path_element not in name_to_node:
@@ -99,7 +99,7 @@ class CgroupTaskRunner(BaseTaskRunner):
         node = trees.Tree().root
         path_split = path.split("/")
         for path_element in path_split:
-            name_to_node = {x.name: x for x in node.children}
+            name_to_node = {x.name.decode(): x for x in node.children}
             self.log.debug("name_to_node: {}".format(name_to_node))
             self.log.debug("path_element: {}".format(path_element))
             if path_element not in name_to_node:
