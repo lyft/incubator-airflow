@@ -259,7 +259,7 @@ class IntervalCheckOperator(BaseOperator):
         rlog = "Ratio for {0}: {1} \n Ratio threshold : {2}"
         fstr = "'{k}' check failed. {r} is above {tr}"
         estr = "The following tests have failed:\n {0}"
-        countstr = "The following {j} tests out of {n} fai:qled:"
+        countstr = "The following {j} tests out of {n} failed:"
         for m in self.metrics_sorted:
             cur = current[m]
             ref = reference[m]
