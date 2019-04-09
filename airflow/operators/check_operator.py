@@ -243,8 +243,8 @@ class IntervalCheckOperator(BaseOperator):
 
     def execute(self, context=None):
         hook = self.get_db_hook()
-        self.log.info('Using ratio formula: %s', self.ratio_formula)
-        self.log.info('Executing SQL check: %s', self.sql2)
+        logging.info('Using ratio formula: %s', self.ratio_formula)
+        logging.info('Executing SQL check: %s', self.sql2)
         row2 = hook.get_first(self.sql2)
         logging.info('Executing SQL check: ' + self.sql1)
         row1 = hook.get_first(self.sql1)
@@ -259,7 +259,7 @@ class IntervalCheckOperator(BaseOperator):
         rlog = "Ratio for {0}: {1} \n Ratio threshold : {2}"
         fstr = "'{k}' check failed. {r} is above {tr}"
         estr = "The following tests have failed:\n {0}"
-        countstr = "The following {j} tests out of {n} failed:"
+        countstr = "The following {j} tests out of {n} fai:qled:"
         for m in self.metrics_sorted:
             cur = current[m]
             ref = reference[m]
@@ -271,7 +271,7 @@ class IntervalCheckOperator(BaseOperator):
                 ratios[m] = self.ratio_formulas[self.ratio_formula](current[m], reference[m])
                 test_results[m] = ratios[m] < threshold
 
-            self.log.info(
+            logging.info(
                 (
                     "Current metric for %s: %s\n"
                     "Past metric for %s: %s\n"
@@ -285,12 +285,12 @@ class IntervalCheckOperator(BaseOperator):
             n = len(self.metrics_sorted)
             logging.warning(countstr.format(**locals()))
             for k in failed_tests:
-                self.log.warning(
+                logging.warning(
                     "'%s' check failed. %s is above %s", k, ratios[k], self.metrics_thresholds[k]
                 )
             raise AirflowException("The following tests have failed:\n {0}".format(", ".join(
                 sorted(failed_tests))))
-        self.log.info("All tests have passed")
+        logging.info("All tests have passed")
 
     def get_db_hook(self):
         return BaseHook.get_hook(conn_id=self.conn_id)
