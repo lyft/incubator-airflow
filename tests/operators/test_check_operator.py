@@ -23,7 +23,7 @@ from airflow.models import DAG
 from airflow.exceptions import AirflowException
 
 from airflow.operators.check_operator import IntervalCheckOperator, ValueCheckOperator
-from tests.compat import mock
+from mock import mock
 
 
 class ValueCheckOperatorTest(unittest.TestCase):
