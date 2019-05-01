@@ -77,12 +77,12 @@ class CgroupTaskRunner(BaseTaskRunner):
         for path_element in path_split:
             name_to_node = {x.name.decode(): x for x in node.children}
             if path_element not in name_to_node:
-                self.log.debug("Creating cgroup %s in %s", path_element, node.path)
+                self.log.debug("Creating cgroup %s in %s", path_element, node.path.decode())
                 node = node.create_cgroup(path_element)
             else:
                 self.log.debug(
                     "Not creating cgroup %s in %s since it already exists",
-                    path_element, node.path
+                    path_element, node.path.decode()
                 )
                 node = name_to_node[path_element]
         return node
@@ -105,14 +105,15 @@ class CgroupTaskRunner(BaseTaskRunner):
                 node = name_to_node[path_element]
         # node is now the leaf node
         parent = node.parent
-        self.log.debug("Deleting cgroup %s/%s", parent, node.name)
+        self.log.debug("Deleting cgroup %s/%s", parent, node.name.decode())
         parent.delete_cgroup(node.name.decode())
+        self.log.debug("Deleted cgroup %s/%s", parent, node.name.decode())
 
     def start(self):
         # Use bash if it's already in a cgroup
         cgroups = self._get_cgroup_names()
-        if ((cgroups.get("cpu") and cgroups.get("cpu") != "/")
-                or (cgroups.get("memory") and cgroups.get("memory") != "/")):
+        if ((cgroups.get("cpu") and cgroups.get("cpu") != "/") or
+                (cgroups.get("memory") and cgroups.get("memory") != "/")):
             self.log.debug(
                 "Already running in a cgroup (cpu: %s memory: %s) so not "
                 "creating another one",
@@ -182,6 +183,7 @@ class CgroupTaskRunner(BaseTaskRunner):
         return return_code
 
     def terminate(self):
+        self.log.debug('the process is terminated')
         if self.process and psutil.pid_exists(self.process.pid):
             reap_process_group(self.process.pid, self.log)
 
@@ -193,7 +195,9 @@ class CgroupTaskRunner(BaseTaskRunner):
             self._delete_cgroup(self.mem_cgroup_name)
         if self._created_cpu_cgroup:
             self._delete_cgroup(self.cpu_cgroup_name)
+        self.log.debug("Deleting temp cfg file")
         super().on_finish()
+        self.log.debug("Deleted temp cfg file")
 
     @staticmethod
     def _get_cgroup_names():
