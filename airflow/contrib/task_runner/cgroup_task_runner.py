@@ -75,7 +75,7 @@ class CgroupTaskRunner(BaseTaskRunner):
         node = trees.Tree().root
         path_split = path.split(os.sep)
         for path_element in path_split:
-            name_to_node = {x.name: x for x in node.children}
+            name_to_node = {x.name.decode(): x for x in node.children}
             if path_element not in name_to_node:
                 self.log.debug("Creating cgroup %s in %s", path_element, node.path)
                 node = node.create_cgroup(path_element)
@@ -97,7 +97,7 @@ class CgroupTaskRunner(BaseTaskRunner):
         node = trees.Tree().root
         path_split = path.split("/")
         for path_element in path_split:
-            name_to_node = {x.name: x for x in node.children}
+            name_to_node = {x.name.decode(): x for x in node.children}
             if path_element not in name_to_node:
                 self.log.warning("Cgroup does not exist: %s", path)
                 return
@@ -106,7 +106,7 @@ class CgroupTaskRunner(BaseTaskRunner):
         # node is now the leaf node
         parent = node.parent
         self.log.debug("Deleting cgroup %s/%s", parent, node.name)
-        parent.delete_cgroup(node.name)
+        parent.delete_cgroup(node.name.decode())
 
     def start(self):
         # Use bash if it's already in a cgroup
