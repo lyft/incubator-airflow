@@ -2645,7 +2645,6 @@ class DagModel(Base):
     dag_id = Column(String(ID_LEN), primary_key=True)
     # A DAG can be paused from the UI / DB
     # Set this default value of is_paused based on a configuration value!
-    # TODO: Do seomthing about this
     is_paused_at_creation = configuration.getboolean('core',
                                                      'dags_are_paused_at_creation')
     is_paused = Column(Boolean, default=is_paused_at_creation)
@@ -2756,6 +2755,9 @@ class DAG(BaseDag, LoggingMixin):
     :type orientation: string
     :param catchup: Perform scheduler catchup (or only run latest)? Defaults to True
     "type catchup: bool"
+    :param paused_at_creation: Whether this DAG should be paused at creation. Defaults
+        to the config setting
+    :type paused_at_creation: bool
     """
 
     def __init__(
@@ -2775,6 +2777,8 @@ class DAG(BaseDag, LoggingMixin):
             sla_miss_callback=None,
             orientation=configuration.get('webserver', 'dag_orientation'),
             catchup=configuration.getboolean('scheduler', 'catchup_by_default'),
+            paused_at_creation=configuration.getboolean('core',
+                                                        'dags_are_paused_at_creation'),
             params=None,
             access_control=None):
 
@@ -2823,6 +2827,7 @@ class DAG(BaseDag, LoggingMixin):
         self.is_subdag = False  # DagBag.bag_dag() will set this to True if appropriate
 
         self.partial = False
+        self._paused_at_creation = paused_at_creation
 
         self._comps = {
             'dag_id',
@@ -3654,6 +3659,7 @@ class DAG(BaseDag, LoggingMixin):
             DagModel).filter(DagModel.dag_id == dag.dag_id).first()
         if not orm_dag:
             orm_dag = DagModel(dag_id=dag.dag_id)
+            orm_dag.is_paused_at_creation = dag._paused_at_creation
             logging.info("Creating ORM DAG for %s",
                          dag.dag_id)
         orm_dag.fileloc = dag.fileloc
