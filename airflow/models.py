@@ -2799,7 +2799,7 @@ class DAG(BaseDag, LoggingMixin):
 
         self._description = description
         # set file location to caller source path
-        self.fileloc = inspect.getsourcefile(inspect.stack()[1][0])
+        self.fileloc = sys._getframe().f_back.f_code.co_filename
         self.task_dict = dict()
         self.start_date = start_date
         self.end_date = end_date
