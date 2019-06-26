@@ -1188,7 +1188,7 @@ class SchedulerJob(BaseJob):
                 expected_start_date = dag.following_schedule(dag_run.execution_date)
                 if expected_start_date:
                     schedule_delay = \
-                        (dag_run.start_date - expected_start_date).total_seconds * 1000
+                        (dag_run.start_date - expected_start_date).total_seconds() * 1000
                     Stats.timing(
                         'dagrun.schedule_delay.{dag_id}'.format(dag_id=dag.dag_id),
                         schedule_delay)
