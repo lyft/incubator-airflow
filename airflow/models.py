@@ -441,6 +441,12 @@ class DagBag(BaseDagBag, LoggingMixin):
         self.dagbag_stats = sorted(
             stats, key=lambda x: x.duration, reverse=True)
 
+        for stat in self.dagbag_stats:
+            parse_duration_millis = stat.duration * 1000
+            dag_file_path = stat.file.lstrip('/')
+            Stats.gauge(
+                'collect_dags.{}'.format(dag_file_path), parse_duration_millis, 1)
+
     def dagbag_report(self):
         """Prints a report around DagBag loading stats"""
         report = textwrap.dedent("""\n
