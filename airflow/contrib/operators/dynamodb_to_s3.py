@@ -33,13 +33,13 @@ def _convert_item_to_json_str(item):
     return json.dumps(item) + '\n'
 
 
-def _upload_file_to_s3(file_obj, bucket_name, s3_key_prefix):
+def _upload_file_to_s3(file_obj, bucket_name, s3_key_prefix, file_ext):
     s3_client = AwsHook().get_client_type('s3')
     file_obj.seek(0)
     s3_client.upload_file(
         Filename=file_obj.name,
         Bucket=bucket_name,
-        Key=s3_key_prefix + str(uuid4()),
+        Key=s3_key_prefix + str(uuid4()) + file_ext,
     )
 
 
@@ -49,6 +49,7 @@ class DynamoDBToS3Operator(BaseOperator):
                  s3_bucket_name,
                  file_size,
                  dynamodb_scan_kwargs,
+                 file_ext,
                  s3_key_prefix='',
                  process_func=_convert_item_to_json_str,
                  *args, **kwargs):
@@ -58,6 +59,7 @@ class DynamoDBToS3Operator(BaseOperator):
         self.s3_bucket_name = s3_bucket_name
         self.s3_key_prefix = s3_key_prefix
         self.dynamodb_scan_kwargs = dynamodb_scan_kwargs
+        self.file_ext = file_ext
 
     def execute(self, context):
         dynamodb_client = AwsHook().get_client_type('dynamodb')
@@ -78,7 +80,7 @@ class DynamoDBToS3Operator(BaseOperator):
                 dynamodb_scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
                 # Upload the file to S3 if reach file size limit
                 if getsize(f.name) >= self.file_size:
-                    _upload_file_to_s3(f, self.s3_bucket_name, self.s3_key_prefix)
+                    _upload_file_to_s3(f, self.s3_bucket_name, self.s3_key_prefix, self.file_ext)
                     f.close()
                     f = NamedTemporaryFile()
         except Exception as e:
