@@ -54,6 +54,7 @@ app = Celery(
 
 @app.task
 def execute_command(command):
+    command = command.replace('\r', ' ').replace('\n', ' ')
     logging.info("Executing command in Celery " + command)
     try:
         output = subprocess.check_output(
