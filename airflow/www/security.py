@@ -250,20 +250,21 @@ class AirflowSecurityManager(SecurityManager, LoggingMixin):
         :param username: Name of the user.
         :return: A set of dag ids that the user could access.
         """
-        if not username:
-            username = g.user
-
-        # if username.is_anonymous or 'Public' in username.roles:
-        #     # return an empty set if the role is public
-        #     return set()
-
-        roles = {role.name for role in username.roles}
-        if {'Admin', 'Viewer', 'User', 'Op'} & roles:
-            return self.DAG_VMS
-
-        user_perms_views = self.get_all_permissions_views()
-        # return a set of all dags that the user could access
-        return set([view for perm, view in user_perms_views if perm in self.DAG_PERMS])
+        return self.DAG_VMS
+        # if not username:
+        #     username = g.user
+        #
+        # # if username.is_anonymous or 'Public' in username.roles:
+        # #     # return an empty set if the role is public
+        # #     return set()
+        #
+        # roles = {role.name for role in username.roles}
+        # if {'Admin', 'Viewer', 'User', 'Op'} & roles:
+        #     return self.DAG_VMS
+        #
+        # user_perms_views = self.get_all_permissions_views()
+        # # return a set of all dags that the user could access
+        # return set([view for perm, view in user_perms_views if perm in self.DAG_PERMS])
 
     def has_access(self, permission, view_name, user=None):
         """
