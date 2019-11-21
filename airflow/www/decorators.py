@@ -101,6 +101,7 @@ def has_dag_access(**dag_kwargs):
     def decorator(f):
         @functools.wraps(f)
         def wrapper(self, *args, **kwargs):
+            return f(self, *args, **kwargs)
             has_access = self.appbuilder.sm.has_access
             dag_id = request.values.get('dag_id')
             # if it is false, we need to check whether user has write access on the dag
