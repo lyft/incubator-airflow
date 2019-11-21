@@ -253,9 +253,9 @@ class AirflowSecurityManager(SecurityManager, LoggingMixin):
         if not username:
             username = g.user
 
-        if username.is_anonymous or 'Public' in username.roles:
-            # return an empty set if the role is public
-            return set()
+        # if username.is_anonymous or 'Public' in username.roles:
+        #     # return an empty set if the role is public
+        #     return set()
 
         roles = {role.name for role in username.roles}
         if {'Admin', 'Viewer', 'User', 'Op'} & roles:

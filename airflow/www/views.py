@@ -70,7 +70,7 @@ from airflow.www.widgets import AirflowModelListWidget
 
 
 PAGE_SIZE = conf.getint('webserver', 'page_size')
-# if os.environ.get('SKIP_DAGS_PARSING') != 'True':
+# if os.environ.get('SKIP_DAGS_PARSING') != 'True'
 #     dagbag = models.DagBag(settings.DAGS_FOLDER)
 # else:
 #     dagbag = models.DagBag(os.devnull, include_examples=False)
