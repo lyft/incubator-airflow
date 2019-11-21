@@ -373,6 +373,8 @@ class DagBag(BaseDagBag, LoggingMixin):
                 found_dags = self.process_file(
                     filepath, only_if_updated=only_if_updated,
                     safe_mode=safe_mode)
+                self.log.info('=======Found what dags=======')
+                self.log.info(found_dags)
 
                 td = timezone.utcnow() - ts
                 td = td.total_seconds() + (
