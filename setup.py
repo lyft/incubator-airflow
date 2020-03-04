@@ -169,8 +169,7 @@ google_authentication = ['Flask-OAuthlib>=0.9.1', 'PyJWT>=1.5.3']
 qds = ['qds-sdk>=1.9.6']
 cloudant = ['cloudant>=0.5.9,<2.0'] # major update coming soon, clamp to 0.x
 
-# all_dbs = postgres + mysql + hive + mssql + hdfs + vertica + cloudant
-all_dbs = postgres + mysql + hive
+all_dbs = postgres + mysql + hive + mssql + hdfs + vertica + cloudant
 devel = [
     'click',
     'freezegun',
@@ -212,15 +211,13 @@ def do_setup():
             'flask-wtf==0.14',
             'funcsigs>=1.0.0, <=1.0.2',
             'future>=0.15.0, <0.16',
-            'gitpython>=2.0.2,<3',
+            'gitpython>=2.0.2',
             # 'gunicorn>=19.3.0, <19.4.0',  # 19.4.? seemed to have issues
             'jinja2>=2.10, <3.0',
-            'JPype1==0.7.1',  # Dropped python2 support
             'lxml>=3.6.0, <4.0',
             'markdown>=2.5.2, <3.0',
-            'numpy>=0.17.1, <=1.16.0',  # Dropped python2 support
             'paramiko>=2.1',
-            'pandas>=0.17.1, <=0.23.1',  # Dropped python2 support
+            'pandas>=0.17.1, <1.0.0',
             'pendulum==1.4.4',
             'psutil>=4.2.0, <5.0.0',
             'pygments>=2.0.1, <3.0',
@@ -235,7 +232,6 @@ def do_setup():
             'tabulate>=0.7.5, <0.8.0',
             'thrift>=0.9.2',
             'tqdm>=4.23.4, <5',
-            'werkzeug<=0.15',
             'zope.deprecation>=4.0, <5.0',
         ],
         extras_require={
