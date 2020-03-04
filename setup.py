@@ -214,10 +214,12 @@ def do_setup():
             'gitpython>=2.0.2',
             # 'gunicorn>=19.3.0, <19.4.0',  # 19.4.? seemed to have issues
             'jinja2>=2.10, <3.0',
+            'JPype1==0.6.3',  # Dropped python2 support
             'lxml>=3.6.0, <4.0',
             'markdown>=2.5.2, <3.0',
+            'numpy>=0.17.1, <=1.16.0',  # Dropped python2 support
             'paramiko>=2.1',
-            'pandas>=0.17.1, <1.0.0',
+            'pandas>=0.17.1, <=0.23.1',  # Dropped python2 support
             'pendulum==1.4.4',
             'psutil>=4.2.0, <5.0.0',
             'pygments>=2.0.1, <3.0',
