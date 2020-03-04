@@ -43,6 +43,7 @@ ipython
 jaydebeapi
 jinja2<2.9.0
 jira
+JPype1==0.7.1  # Dropped python2 support
 ldap3
 lxml
 markdown
