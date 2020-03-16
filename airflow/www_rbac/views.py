@@ -214,6 +214,8 @@ class Airflow(AirflowBaseView):
     @has_access
     @provide_session
     def index(self, session=None):
+        appbuilder.sm.sync_dag_for_default_role()
+
         DM = models.DagModel
 
         hide_paused_dags_by_default = conf.getboolean('webserver',

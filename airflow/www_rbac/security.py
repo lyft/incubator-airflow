@@ -25,10 +25,10 @@ from sqlalchemy import or_, and_
 
 from airflow import models
 from airflow.exceptions import AirflowException
+from airflow.models.serialized_dag import SerializedDagModel
 from airflow.www_rbac.app import appbuilder
 from airflow.utils.db import provide_session
 from airflow.utils.log.logging_mixin import LoggingMixin
-
 
 EXISTING_ROLES = {
     'Admin',
@@ -36,6 +36,7 @@ EXISTING_ROLES = {
     'User',
     'Op',
     'Public',
+    'Default',
 }
 
 
@@ -80,6 +81,8 @@ class AirflowSecurityManager(SecurityManager, LoggingMixin):
         'XComs',
         'XComModelView',
     }
+
+    DEFAULT_VMS = VIEWER_VMS | OP_VMS
 
     ###########################################################################
     #                               PERMISSIONS
@@ -135,6 +138,8 @@ class AirflowSecurityManager(SecurityManager, LoggingMixin):
         'can_varimport',
     }
 
+    DEFAULT_PERMS = VIEWER_PERMS | USER_PERMS | OP_PERMS
+
     # global view-menu for dag-level access
     DAG_VMS = {
         'all_dags'
@@ -169,6 +174,11 @@ class AirflowSecurityManager(SecurityManager, LoggingMixin):
             'role': 'Op',
             'perms': VIEWER_PERMS | USER_PERMS | OP_PERMS | DAG_PERMS,
             'vms': VIEWER_VMS | DAG_VMS | USER_VMS | OP_VMS,
+        },
+        {
+            'role': 'Default',
+            'perms': VIEWER_PERMS | USER_PERMS | OP_PERMS,
+            'vms': VIEWER_VMS | USER_VMS | OP_VMS,
         },
     ]
 
@@ -243,6 +253,49 @@ class AirflowSecurityManager(SecurityManager, LoggingMixin):
                                 for perm_view in role.permissions})
         return perms_views
 
+    def sync_dag_for_default_role(self, user=None):
+        """
+        This method is to sync public dag for default role.
+        This behavior will be called when '/home' has been triggered.
+        """
+        if not user:
+            user = g.user
+        if user.is_anonymous:
+            return
+        default_role = self.find_role("Default")
+        if default_role in user.roles:
+            serialized_dags = SerializedDagModel.read_all_dags().values()
+            for dag in serialized_dags:
+                default = self.find_role("Default")
+                if not hasattr(dag, 'access_control') or dag.access_control is None:
+                    for dag_perm in self.DAG_PERMS:
+                        perm = self._get_or_create_dag_permission(dag_perm, dag.dag_id)
+                        self.add_permission_role(default, perm)
+
+    def check_default_role_access(self, view_name, user):
+        """
+        This is to check if default role can read/edit the dag.
+        This method only return True when:
+        1. the user is default role
+        2. get dag model and dag has "access_control" parameter.
+        """
+        default = self.find_role("Default")
+        if default not in user.roles:
+            return False
+        serialized_dag = SerializedDagModel.get(view_name)
+        if not serialized_dag:
+            # This view is not a dag.
+            return False
+        dag = serialized_dag.dag
+        # check if dag is public dag:
+        # If dag is public but doesn't have perm, sync the perm. Otherwise, return True.
+        if not hasattr(dag, 'access_control') or dag.access_control is None:
+            for dag_perm in self.DAG_PERMS:
+                perm = self._get_or_create_dag_permission(dag_perm, dag.dag_id)
+                self.add_permission_role(default, perm)
+            return True
+        return False
+
     def get_accessible_dag_ids(self, username=None):
         """
         Return a set of dags that user has access to(either read or write).
@@ -283,6 +336,10 @@ class AirflowSecurityManager(SecurityManager, LoggingMixin):
             user = g.user
         if user.is_anonymous:
             return self.is_item_public(permission, view_name)
+
+        check_result = self.check_default_role_access(view_name, user)
+        if check_result:
+            return True
         return self._has_view_access(user, permission, view_name)
 
     def _get_and_cache_perms(self):
@@ -522,16 +579,6 @@ class AirflowSecurityManager(SecurityManager, LoggingMixin):
             {'can_dag_read'}
         :type access_control: dict
         """
-        def _get_or_create_dag_permission(perm_name):
-            dag_perm = self.find_permission_view_menu(perm_name, dag_id)
-            if not dag_perm:
-                self.log.info("Creating new permission '{}' on view '{}'".format(
-                    perm_name,
-                    dag_id
-                ))
-                dag_perm = self.add_permission_view_menu(perm_name, dag_id)
-
-            return dag_perm
 
         def _revoke_stale_permissions(dag_view):
             existing_dag_perms = self.find_permissions_view_menu(dag_view)
@@ -572,8 +619,19 @@ class AirflowSecurityManager(SecurityManager, LoggingMixin):
                                     self.DAG_PERMS))
 
             for perm_name in perms:
-                dag_perm = _get_or_create_dag_permission(perm_name)
+                dag_perm = self._get_or_create_dag_permission(perm_name, dag_id)
                 self.add_permission_role(role, dag_perm)
+
+    def _get_or_create_dag_permission(self, perm_name, dag_id):
+        dag_perm = self.find_permission_view_menu(perm_name, dag_id)
+        if not dag_perm:
+            self.log.info("Creating new permission '{}' on view '{}'".format(
+                perm_name,
+                dag_id
+            ))
+            dag_perm = self.add_permission_view_menu(perm_name, dag_id)
+
+        return dag_perm
 
     def create_perm_vm_for_all_dag(self):
         """
