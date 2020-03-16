@@ -36,6 +36,7 @@ EXISTING_ROLES = {
     'User',
     'Op',
     'Public',
+    'Default',
 }
 
 
@@ -80,6 +81,8 @@ class AirflowSecurityManager(SecurityManager, LoggingMixin):
         'XComs',
         'XComModelView',
     }
+
+    DEFAULT_VMS = VIEWER_VMS | OP_VMS
 
     ###########################################################################
     #                               PERMISSIONS
@@ -135,6 +138,8 @@ class AirflowSecurityManager(SecurityManager, LoggingMixin):
         'can_varimport',
     }
 
+    DEFAULT_PERMS = VIEWER_PERMS | USER_PERMS | OP_PERMS
+
     # global view-menu for dag-level access
     DAG_VMS = {
         'all_dags'
@@ -169,6 +174,11 @@ class AirflowSecurityManager(SecurityManager, LoggingMixin):
             'role': 'Op',
             'perms': VIEWER_PERMS | USER_PERMS | OP_PERMS | DAG_PERMS,
             'vms': VIEWER_VMS | DAG_VMS | USER_VMS | OP_VMS,
+        },
+        {
+            'role': 'Default',
+            'perms': VIEWER_PERMS | USER_PERMS | OP_PERMS,
+            'vms': VIEWER_VMS | USER_VMS | OP_VMS,
         },
     ]
 
