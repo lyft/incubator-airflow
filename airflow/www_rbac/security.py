@@ -177,7 +177,7 @@ class AirflowSecurityManager(SecurityManager, LoggingMixin):
         },
         {
             'role': 'Default',
-            'perms': DFEAULT_PERMS,
+            'perms': DEFAULT_PERMS,
             'vms': DEFAULT_VMS,
         },
     ]
