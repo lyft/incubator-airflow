@@ -345,7 +345,7 @@ def _pools(session, pools_config):
 
         existing_pool = existing_pools.get(pool_name_config)
         if int(pool_slots_config) != int(existing_pool.slots) \
-            or pool_desc_config != existing_pool.description:
+                or pool_desc_config != existing_pool.description:
             print("Need to update pool: {}".format(existing_pool.pool))
             print("Original slots: {}\nNew slots: {}".format(existing_pool.slots, pool_slots_config))
             print("Original description: {}\nNew description: {}".format(
