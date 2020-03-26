@@ -293,6 +293,7 @@ def pool(args):
     else:
         print(_tabulate(pools=pools))
 
+
 @cli_utils.action_logging
 def pools(args):
     """
@@ -343,10 +344,12 @@ def _pools(session, pools_config):
             continue
 
         existing_pool = existing_pools.get(pool_name_config)
-        if int(pool_slots_config) != int(existing_pool.slots) or pool_desc_config != existing_pool.description:
+        if int(pool_slots_config) != int(existing_pool.slots) \
+            or pool_desc_config != existing_pool.description:
             print("Need to update pool: {}".format(existing_pool.pool))
             print("Original slots: {}\nNew slots: {}".format(existing_pool.slots, pool_slots_config))
-            print("Original description: {}\nNew description: {}".format(existing_pool.description, pool_desc_config))
+            print("Original description: {}\nNew description: {}".format(
+                existing_pool.description, pool_desc_config))
             existing_pool.slots = pool_slots_config
             existing_pool.description = pool_desc_config
             pools_to_update.append(
@@ -364,6 +367,7 @@ def _pools(session, pools_config):
         session.delete(pool_to_delete)
 
     session.commit()
+
 
 def pool_import_helper(filepath):
     with open(filepath, 'r') as poolfile:
