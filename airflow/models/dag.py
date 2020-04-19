@@ -1195,7 +1195,7 @@ class DAG(BaseDag, LoggingMixin):
         self.task_dict = {}
         try:
             dag = copy.deepcopy(self)
-        except:
+        except Exception:
             self.log.info("Deepcopy DAG {} failed. Loading from dag file directly".format(self.dag_id))
             dagbag = DagBag(dag_folder=self.full_filepath)
             if self.dag_id not in dagbag.dags:
