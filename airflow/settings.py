@@ -369,9 +369,12 @@ def import_local_settings():
 def preload_custom_imports():
     """
     Any custom imports that need to loaded and cached,
-    for example of custom hooks, sensors and operators
+    for example of custom hooks, sensors and operators.
+
+    This method is meant to be overridden in airflow_local_settings.py
     :rtype: None
     """
+    pass
 
 
 def initialize(preload_imports=False):
