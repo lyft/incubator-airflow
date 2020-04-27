@@ -28,8 +28,6 @@ import logging
 import subprocess
 import os
 
-from airflow.models import Variable
-
 CONFIDANT_JSON_FILE = '/dev/shm/confidant/confidant_data'
 
 def refresh_env_from_confidant():
