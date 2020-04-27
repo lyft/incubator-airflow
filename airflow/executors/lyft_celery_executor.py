@@ -86,7 +86,7 @@ class LyftCeleryExecutor(CeleryExecutor):
             if dag_id in self.py3_dag_id_whitelist:
                 queue = 'py3'
         except Exception as e:
-            self.logger.error('Failing to do queue routing because of {e}'.format(e=str(e)))
+            self.logger.error('Failed to do queue routing because of {e}'.format(e=str(e)))
 
         self.tasks[key] = execute_command_with_fresh_creds.apply_async(
             args=[command], queue=queue)
