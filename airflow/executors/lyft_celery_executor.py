@@ -28,6 +28,8 @@ import logging
 import subprocess
 import os
 
+from airflow.models import Variable
+
 CONFIDANT_JSON_FILE = '/dev/shm/confidant/confidant_data'
 
 def refresh_env_from_confidant():
@@ -68,9 +70,26 @@ class LyftCeleryExecutor(CeleryExecutor):
     launching the subprocess corresponding to each task.
     """
 
+    def __init__(self):
+        super(LyftCeleryExecutor, self).__init__()
+        self.py3_dag_id_whitelist = {
+            'engdocs_page_views'
+        }
+
     def execute_async(self, key, command, queue=DEFAULT_QUEUE):
         self.logger.info("[celery] queuing {key} through celery, "
                          "queue={queue}".format(**locals()))
+
+        try:
+            # key is a tuple and here is an example:
+            # (u'dag_gschema_data_compactor', u'zippy_partition_issue_redrive_event_gschema_route_v3',
+            #   datetime.datetime(2020, 4, 27, 21, 15))
+            dag_id = key[0]
+            if dag_id in self.py3_dag_id_whitelist:
+                queue = 'py3'
+        except Exception as e:
+            self.logger.error('Failing to do queue routing because of {e}'.format(e=str(e)))
+
         self.tasks[key] = execute_command_with_fresh_creds.apply_async(
             args=[command], queue=queue)
         self.last_state[key] = celery_states.PENDING
