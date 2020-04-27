@@ -70,6 +70,8 @@ class LyftCeleryExecutor(CeleryExecutor):
 
     def __init__(self):
         super(LyftCeleryExecutor, self).__init__()
+
+        # DAG IDs in this whitelist will be routed to the py3 queue
         self.py3_dag_id_whitelist = {
             'engdocs_page_views'
         }
