@@ -365,7 +365,7 @@ class DagBag(BaseDagBag, LoggingMixin):
         dag.resolve_template_files()
         dag.last_loaded = datetime.now()
 
-        for task in dag.tasks:
+        for task in dag.tasks:  # type: BaseOperator
             settings.policy(task)
 
         for subdag in dag.subdags:
@@ -1870,7 +1870,7 @@ class SkipMixin(object):
                 processed_tis_repr.add(repr(downstream_task))
         for downstream_task in all_downstream:
             all_downstream.extend(self.find_all_downstream_skippable(downstream_task, processed_tis_repr))
-            
+
         return all_downstream
 
 
