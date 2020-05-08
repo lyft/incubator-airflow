@@ -4492,6 +4492,7 @@ class DagRun(Base):
         # check for removed or restored tasks
         task_ids = []
         for ti in tis_in_db:
+            settings.task_instance_policy(ti)
             task_ids.append(ti.task_id)
             task_from_dag = None
             try:
@@ -4518,6 +4519,7 @@ class DagRun(Base):
 
             if task.task_id not in task_ids:
                 ti = TaskInstance(task, self.execution_date)
+                settings.task_instance_policy(ti)
                 session.add(ti)
 
         session.commit()

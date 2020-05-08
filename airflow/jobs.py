@@ -48,7 +48,7 @@ from airflow.exceptions import AirflowException
 from airflow.models import DAG, DagRun, TaskInstance
 from airflow.settings import Stats
 from airflow.task_runner import get_task_runner
-from airflow.settings import Stats, PROGRESS_BAR_FORMAT, task_instance_policy
+from airflow.settings import Stats, PROGRESS_BAR_FORMAT
 from airflow.ti_deps.dep_context import DepContext, QUEUE_DEPS, RUN_DEPS
 from airflow.utils.state import State
 from airflow.utils.db import provide_session, pessimistic_connection_handling
@@ -1003,11 +1003,6 @@ class SchedulerJob(BaseJob):
             .filter(TI.state.in_(states))
             .all()
         )
-
-        for task_instance in task_instances_to_examine:
-            task_instance_policy(task_instance)
-            session.merge(task_instance)
-        session.commit()
 
         # Put one task instance on each line
         if len(task_instances_to_examine) == 0:
