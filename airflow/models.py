@@ -1020,6 +1020,9 @@ class TaskInstance(Base, LoggingMixin):
             self.try_number = ti.try_number
             self.hostname = ti.hostname
             self.pid = ti.pid
+            self.queue = ti.queue
+            self.pool = ti.pool
+            self.priority_weight = ti.priority_weight
         else:
             self.state = None
 
