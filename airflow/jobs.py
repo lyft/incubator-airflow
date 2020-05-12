@@ -913,6 +913,10 @@ class SchedulerJob(BaseJob):
                 if ti.are_dependencies_met(
                         dep_context=DepContext(flag_upstream_failed=True),
                         session=session):
+                    self.logger.info('[ctsai] _process_task_instances. execution_date={} try_number={}. queue={}'.format(
+                        ti.execution_date, ti.try_number, ti.queue
+                    ))
+
                     self.logger.debug('Queuing task: {}'.format(ti))
                     queue.append(ti.key)
 
@@ -1187,7 +1191,7 @@ class SchedulerJob(BaseJob):
             dag = dagbag.get_dag(dag.dag_id)
             if dag.is_paused:
                 self.logger.info("Not processing DAG {} since it's paused"
-                                 .format(dag.dag_id))
+                                 .f1ormat(dag.dag_id))
                 continue
 
             if not dag:
@@ -1272,7 +1276,7 @@ class SchedulerJob(BaseJob):
             if last_runtime is not None:
                 Stats.gauge('last_runtime.{}'.format(name), last_runtime)
             if last_run is not None:
-                unixtime = last_run.strftime("%s")
+                unixtime = int(last_run.strftime("%s"))
                 seconds_ago = (datetime.now() - last_run).total_seconds()
                 Stats.gauge('last_run.unixtime.{}'.format(name), unixtime)
                 Stats.gauge('last_run.seconds_ago.{}'.format(name), seconds_ago)
@@ -1486,7 +1490,7 @@ class SchedulerJob(BaseJob):
                                              (State.SCHEDULED,))
 
             # Call hearbeats
-            self.logger.info("Heartbeating the executor")
+            self.logger.info("Heartbeating the executor111111")
 
             try:
                 self.executor.heartbeat()
@@ -1638,8 +1642,10 @@ class SchedulerJob(BaseJob):
             dag = dagbag.dags[ti_key[0]]
             task = dag.get_task(ti_key[1])
             ti = models.TaskInstance(task, ti_key[2])
-
             ti.refresh_from_db(session=session, lock_for_update=True)
+            logging.info('process_file: execution_date:{execution_date} try_number={try_number}, queue={queue}'.format(
+                try_number=ti.try_number, queue=ti.queue, execution_date=ti.execution_date,
+            ))
             # We can defer checking the task dependency checks to the worker themselves
             # since they can be expensive to run in the scheduler.
             dep_context = DepContext(deps=QUEUE_DEPS, ignore_task_deps=True)
@@ -1920,6 +1926,8 @@ class BackfillJob(BaseJob):
                 # explictely mark running as we can fill gaps
                 run.state = State.RUNNING
                 run.run_id = run_id
+
+
                 run.verify_integrity(session=session)
 
                 # check if we have orphaned tasks

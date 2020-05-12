@@ -4501,6 +4501,9 @@ class DagRun(Base):
         task_ids = []
         for ti in tis_in_db:
             settings.task_instance_policy(ti)
+            logging.info('[ctsai] verify_integrity: execution_date:{execution_date} try_number={try_number}, queue={queue}'.format(
+                try_number=ti.try_number, queue=ti.queue, execution_date=ti.execution_date,
+            ))
             task_ids.append(ti.task_id)
             task_from_dag = None
             try:
@@ -4519,6 +4522,7 @@ class DagRun(Base):
                 logging.info("Restoring task '{}' which was previously removed from DAG '{}'".format(ti, dag))
                 Stats.incr("task_restored_to_dag.{}".format(dag.dag_id), 1, 1)
                 ti.state = State.NONE
+            session.merge(ti)
 
         # check for missing tasks
         for task in dag.tasks:
@@ -4529,6 +4533,9 @@ class DagRun(Base):
                 ti = TaskInstance(task, self.execution_date)
                 settings.task_instance_policy(ti)
                 session.add(ti)
+                logging.info('[ctsai] verify_integrity: execution_date:{execution_date} try_number={try_number}, queue={queue}'.format(
+                    try_number=ti.try_number, queue=ti.queue, execution_date=ti.execution_date,
+                ))
 
         session.commit()
 
