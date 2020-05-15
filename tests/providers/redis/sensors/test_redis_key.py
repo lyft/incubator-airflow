@@ -21,7 +21,7 @@ import unittest
 
 import pytest
 
-from airflow import DAG
+from airflow.models.dag import DAG
 from airflow.providers.redis.hooks.redis import RedisHook
 from airflow.providers.redis.sensors.redis_key import RedisKeySensor
 from airflow.utils import timezone
@@ -53,7 +53,3 @@ class TestRedisSensor(unittest.TestCase):
         self.assertTrue(self.sensor.poke(None), "Key exists on first call.")
         redis.delete('test_key')
         self.assertFalse(self.sensor.poke(None), "Key does NOT exists on second call.")
-
-
-if __name__ == '__main__':
-    unittest.main()

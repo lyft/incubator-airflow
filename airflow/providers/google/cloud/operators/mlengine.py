@@ -24,7 +24,8 @@ import warnings
 from typing import List, Optional
 
 from airflow.exceptions import AirflowException
-from airflow.models import BaseOperator
+from airflow.models import BaseOperator, BaseOperatorLink
+from airflow.models.taskinstance import TaskInstance
 from airflow.providers.google.cloud.hooks.mlengine import MLEngineHook
 from airflow.utils.decorators import apply_defaults
 
@@ -852,6 +853,23 @@ class MLEngineDeleteVersionOperator(BaseOperator):
         )
 
 
+class AIPlatformConsoleLink(BaseOperatorLink):
+    """
+    Helper class for constructing AI Platform Console link.
+    """
+    name = "AI Platform Console"
+
+    def get_link(self, operator, dttm):
+        task_instance = TaskInstance(task=operator, execution_date=dttm)
+        gcp_metadata_dict = task_instance.xcom_pull(task_ids=operator.task_id, key="gcp_metadata")
+        if not gcp_metadata_dict:
+            return ''
+        job_id = gcp_metadata_dict['job_id']
+        project_id = gcp_metadata_dict['project_id']
+        console_link = f"https://console.cloud.google.com/ai-platform/jobs/{job_id}?project={project_id}"
+        return console_link
+
+
 class MLEngineStartTrainingJobOperator(BaseOperator):
     """
     Operator for launching a MLEngine training job.
@@ -914,6 +932,10 @@ class MLEngineStartTrainingJobOperator(BaseOperator):
         '_python_version',
         '_job_dir'
     ]
+
+    operator_extra_links = (
+        AIPlatformConsoleLink(),
+    )
 
     @apply_defaults
     def __init__(self,  # pylint: disable=too-many-arguments
@@ -1005,8 +1027,16 @@ class MLEngineStartTrainingJobOperator(BaseOperator):
         # Helper method to check if the existing job's training input is the
         # same as the request we get here.
         def check_existing_job(existing_job):
-            return existing_job.get('trainingInput', None) == \
-                training_request['trainingInput']
+            existing_training_input = existing_job.get('trainingInput', None)
+            requested_training_input = training_request['trainingInput']
+            if 'scaleTier' not in existing_training_input:
+                existing_training_input['scaleTier'] = None
+
+            existing_training_input['args'] = existing_training_input.get('args', None)
+            requested_training_input["args"] = requested_training_input['args'] \
+                if requested_training_input["args"] else None
+
+            return existing_training_input == requested_training_input
 
         finished_training_job = hook.create_job(
             project_id=self._project_id, job=training_request, use_existing_job_fn=check_existing_job
@@ -1016,8 +1046,14 @@ class MLEngineStartTrainingJobOperator(BaseOperator):
             self.log.error('MLEngine training job failed: %s', str(finished_training_job))
             raise RuntimeError(finished_training_job['errorMessage'])
 
+        gcp_metadata = {
+            "job_id": job_id,
+            "project_id": self._project_id,
+        }
+        context['task_instance'].xcom_push("gcp_metadata", gcp_metadata)
 
-class MLEngineTrainingJobFailureOperator(BaseOperator):
+
+class MLEngineTrainingCancelJobOperator(BaseOperator):
 
     """
     Operator for cleaning up failed MLEngine training job.

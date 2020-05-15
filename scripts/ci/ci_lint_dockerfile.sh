@@ -15,8 +15,6 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-export AIRFLOW_CI_SILENT=${AIRFLOW_CI_SILENT:="true"}
-
 # shellcheck source=scripts/ci/_script_init.sh
 . "$( dirname "${BASH_SOURCE[0]}" )/_script_init.sh"
 
@@ -30,7 +28,7 @@ function run_docker_lint() {
             -v "$(pwd):/root" \
             -w /root \
             --rm \
-            hadolint/hadolint /bin/hadolint Dockerfile*
+            hadolint/hadolint:v1.17.5-12-gef29cb7-debian /bin/hadolint Dockerfile*
         echo
         echo "Docker pylint completed with no errors"
         echo

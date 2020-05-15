@@ -19,7 +19,7 @@
 
 import unittest
 
-from airflow import DAG
+from airflow.models.dag import DAG
 from airflow.providers.slack.operators.slack_webhook import SlackWebhookOperator
 from airflow.utils import timezone
 
@@ -79,7 +79,3 @@ class TestSlackWebhookOperator(unittest.TestCase):
                            'username', 'proxy']
 
         self.assertEqual(operator.template_fields, template_fields)
-
-
-if __name__ == '__main__':
-    unittest.main()

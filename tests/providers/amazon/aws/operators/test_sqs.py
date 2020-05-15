@@ -22,7 +22,7 @@ from unittest.mock import MagicMock
 
 from moto import mock_sqs
 
-from airflow import DAG
+from airflow.models.dag import DAG
 from airflow.providers.amazon.aws.hooks.sqs import SQSHook
 from airflow.providers.amazon.aws.operators.sqs import SQSPublishOperator
 from airflow.utils import timezone
@@ -67,7 +67,3 @@ class TestSQSPublishOperator(unittest.TestCase):
         context_calls = []
 
         self.assertTrue(self.mock_context['ti'].method_calls == context_calls, "context call  should be same")
-
-
-if __name__ == '__main__':
-    unittest.main()

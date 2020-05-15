@@ -18,8 +18,10 @@
 
 import copy
 import logging
+import multiprocessing
 import os
 import pathlib
+import re
 import shlex
 import subprocess
 import sys
@@ -32,9 +34,9 @@ from typing import Dict, Optional, Tuple, Union
 
 import yaml
 from cryptography.fernet import Fernet
-from zope.deprecation import deprecated
 
 from airflow.exceptions import AirflowConfigException
+from airflow.utils.module_loading import import_string
 
 log = logging.getLogger(__name__)
 
@@ -158,7 +160,8 @@ class AirflowConfigParser(ConfigParser):
     # about. Mapping of section -> setting -> { old, replace, by_version }
     deprecated_values = {
         'core': {
-            'task_runner': ('BashTaskRunner', 'StandardTaskRunner', '2.0'),
+            'task_runner': (re.compile(r'\ABashTaskRunner\Z'), r'StandardTaskRunner', '2.0'),
+            'hostname_callable': (re.compile(r':'), r'.', '2.0'),
         },
     }
 
@@ -178,6 +181,32 @@ class AirflowConfigParser(ConfigParser):
         self.is_validated = False
 
     def _validate(self):
+
+        self._validate_config_dependencies()
+
+        for section, replacement in self.deprecated_values.items():
+            for name, info in replacement.items():
+                old, new, version = info
+                current_value = self.get(section, name, fallback=None)
+                if self._using_old_value(old, current_value):
+                    new_value = re.sub(old, new, current_value)
+                    self._update_env_var(
+                        section=section, name=name, new_value=new_value)
+                    self._create_future_warning(
+                        name=name,
+                        section=section,
+                        current_value=current_value,
+                        new_value=new_value,
+                        version=version)
+
+        self.is_validated = True
+
+    def _validate_config_dependencies(self):
+        """
+        Validate that config values aren't invalid given other config values
+        or system-level limitations and requirements.
+        """
+
         if (
                 self.get("core", "executor") not in ('DebugExecutor', 'SequentialExecutor') and
                 "sqlite" in self.get('core', 'sql_alchemy_conn')):
@@ -185,27 +214,36 @@ class AirflowConfigParser(ConfigParser):
                 "error: cannot use sqlite with the {}".format(
                     self.get('core', 'executor')))
 
-        for section, replacement in self.deprecated_values.items():
-            for name, info in replacement.items():
-                old, new, version = info
-                if self.get(section, name, fallback=None) == old:
-                    # Make sure the env var option is removed, otherwise it
-                    # would be read and used instead of the value we set
-                    env_var = self._env_var_name(section, name)
-                    os.environ.pop(env_var, None)
+        if self.has_option('core', 'mp_start_method'):
+            mp_start_method = self.get('core', 'mp_start_method')
+            start_method_options = multiprocessing.get_all_start_methods()
 
-                    self.set(section, name, new)
-                    warnings.warn(
-                        'The {name} setting in [{section}] has the old default value '
-                        'of {old!r}. This value has been changed to {new!r} in the '
-                        'running config, but please update your config before Apache '
-                        'Airflow {version}.'.format(
-                            name=name, section=section, old=old, new=new, version=version
-                        ),
-                        FutureWarning
-                    )
+            if mp_start_method not in start_method_options:
+                raise AirflowConfigException(
+                    "mp_start_method should not be " + mp_start_method +
+                    ". Possible values are " + ", ".join(start_method_options))
 
-        self.is_validated = True
+    def _using_old_value(self, old, current_value):
+        return old.search(current_value) is not None
+
+    def _update_env_var(self, section, name, new_value):
+        # Make sure the env var option is removed, otherwise it
+        # would be read and used instead of the value we set
+        env_var = self._env_var_name(section, name)
+        os.environ.pop(env_var, None)
+        self.set(section, name, new_value)
+
+    @staticmethod
+    def _create_future_warning(name, section, current_value, new_value, version):
+        warnings.warn(
+            'The {name} setting in [{section}] has the old default value '
+            'of {current_value!r}. This value has been changed to {new_value!r} in the '
+            'running config, but please update your config before Apache '
+            'Airflow {version}.'.format(
+                name=name, section=section, current_value=current_value, new_value=new_value, version=version
+            ),
+            FutureWarning
+        )
 
     @staticmethod
     def _env_var_name(section, key):
@@ -304,6 +342,27 @@ class AirflowConfigParser(ConfigParser):
 
     def getfloat(self, section, key, **kwargs):
         return float(self.get(section, key, **kwargs))
+
+    def getimport(self, section, key, **kwargs):
+        """
+        Reads options, imports the full qualified name, and returns the object.
+
+        In case of failure, it throws an exception a clear message with the key aad the section names
+
+        :return: The object or None, if the option is empty
+        """
+        full_qualified_path = conf.get(section=section, key=key, **kwargs)
+        if not full_qualified_path:
+            return None
+
+        try:
+            return import_string(full_qualified_path)
+        except ImportError as e:
+            log.error(e)
+            raise AirflowConfigException(
+                f'The object could not be loaded. Please check "{key}" key in "{section}" section. '
+                f'Current value: "{full_qualified_path}".'
+            )
 
     def read(self, filenames, **kwargs):
         super().read(filenames, **kwargs)
@@ -484,7 +543,8 @@ class AirflowConfigParser(ConfigParser):
         log.info("Reading test configuration from %s", TEST_CONFIG_FILE)
         self.read(TEST_CONFIG_FILE)
 
-    def _warn_deprecate(self, section, key, deprecated_section, deprecated_name):
+    @staticmethod
+    def _warn_deprecate(section, key, deprecated_section, deprecated_name):
         if section == deprecated_section:
             warnings.warn(
                 'The {old} option in [{section}] has been renamed to {new} - the old '
@@ -633,24 +693,113 @@ if not os.path.isfile(WEBSERVER_CONFIG):
 if conf.getboolean('core', 'unit_test_mode'):
     conf.load_test_config()
 
+
 # Historical convenience functions to access config entries
+def load_test_config():
+    warnings.warn(
+        "Accessing configuration method 'load_test_config' directly from the configuration module is "
+        "deprecated. Please access the configuration from the 'configuration.conf' object via "
+        "'conf.load_test_config'",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    conf.load_test_config()
 
-load_test_config = conf.load_test_config
-get = conf.get
-getboolean = conf.getboolean
-getfloat = conf.getfloat
-getint = conf.getint
-getsection = conf.getsection
-has_option = conf.has_option
-remove_option = conf.remove_option
-as_dict = conf.as_dict
-set = conf.set  # noqa
 
-for func in [load_test_config, get, getboolean, getfloat, getint, has_option,
-             remove_option, as_dict, set]:
-    deprecated(
-        func.__name__,
-        "Accessing configuration method '{f.__name__}' directly from "
-        "the configuration module is deprecated. Please access the "
-        "configuration from the 'configuration.conf' object via "
-        "'conf.{f.__name__}'".format(f=func))
+def get(*args, **kwargs):
+    warnings.warn(
+        "Accessing configuration method 'get' directly from the configuration module is "
+        "deprecated. Please access the configuration from the 'configuration.conf' object via "
+        "'conf.get'",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return conf.get(*args, **kwargs)
+
+
+def getboolean(*args, **kwargs):
+    warnings.warn(
+        "Accessing configuration method 'getboolean' directly from the configuration module is "
+        "deprecated. Please access the configuration from the 'configuration.conf' object via "
+        "'conf.getboolean'",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return conf.getboolean(*args, **kwargs)
+
+
+def getfloat(*args, **kwargs):
+    warnings.warn(
+        "Accessing configuration method 'getfloat' directly from the configuration module is "
+        "deprecated. Please access the configuration from the 'configuration.conf' object via "
+        "'conf.getfloat'",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return conf.getfloat(*args, **kwargs)
+
+
+def getint(*args, **kwargs):
+    warnings.warn(
+        "Accessing configuration method 'getint' directly from the configuration module is "
+        "deprecated. Please access the configuration from the 'configuration.conf' object via "
+        "'conf.getint'",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return conf.getint(*args, **kwargs)
+
+
+def getsection(*args, **kwargs):
+    warnings.warn(
+        "Accessing configuration method 'getsection' directly from the configuration module is "
+        "deprecated. Please access the configuration from the 'configuration.conf' object via "
+        "'conf.getsection'",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return conf.getint(*args, **kwargs)
+
+
+def has_option(*args, **kwargs):
+    warnings.warn(
+        "Accessing configuration method 'has_option' directly from the configuration module is "
+        "deprecated. Please access the configuration from the 'configuration.conf' object via "
+        "'conf.has_option'",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return conf.has_option(*args, **kwargs)
+
+
+def remove_option(*args, **kwargs):
+    warnings.warn(
+        "Accessing configuration method 'remove_option' directly from the configuration module is "
+        "deprecated. Please access the configuration from the 'configuration.conf' object via "
+        "'conf.remove_option'",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return conf.remove_option(*args, **kwargs)
+
+
+def as_dict(*args, **kwargs):
+    warnings.warn(
+        "Accessing configuration method 'as_dict' directly from the configuration module is "
+        "deprecated. Please access the configuration from the 'configuration.conf' object via "
+        "'conf.as_dict'",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return conf.as_dict(*args, **kwargs)
+
+
+def set(*args, **kwargs):
+    warnings.warn(
+        "Accessing configuration method 'set' directly from the configuration module is "
+        "deprecated. Please access the configuration from the 'configuration.conf' object via "
+        "'conf.set'",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return conf.set(*args, **kwargs)

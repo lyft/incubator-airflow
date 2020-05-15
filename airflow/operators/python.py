@@ -32,7 +32,6 @@ import dill
 from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator, SkipMixin
 from airflow.utils.decorators import apply_defaults
-from airflow.utils.operator_helpers import context_to_airflow_vars
 from airflow.utils.process_utils import execute_in_subprocess
 from airflow.utils.python_virtualenv import prepare_virtualenv
 
@@ -127,13 +126,6 @@ class PythonOperator(BaseOperator):
         return op_kwargs
 
     def execute(self, context: Dict):
-        # Export context to make it available for callables to use.
-        airflow_context_vars = context_to_airflow_vars(context, in_env_var_format=True)
-        self.log.debug("Exporting the following env vars:\n%s",
-                       '\n'.join(["{}={}".format(k, v)
-                                  for k, v in airflow_context_vars.items()]))
-        os.environ.update(airflow_context_vars)
-
         context.update(self.op_kwargs)
         context['templates_dict'] = self.templates_dict
 
@@ -144,6 +136,12 @@ class PythonOperator(BaseOperator):
         return return_value
 
     def execute_callable(self):
+        """
+        Calls the python callable with the given arguments.
+
+        :return: the return value of the call.
+        :rtype: any
+        """
         return self.python_callable(*self.op_args, **self.op_kwargs)
 
 
@@ -248,7 +246,7 @@ class PythonVirtualenvOperator(PythonOperator):
     """
 
     @apply_defaults
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments
         self,
         python_callable: Callable,
         requirements: Optional[Iterable[str]] = None,
@@ -286,8 +284,8 @@ class PythonVirtualenvOperator(PythonOperator):
         if (not isinstance(self.python_callable,
                            types.FunctionType) or (self.python_callable.__name__ ==
                                                    (lambda x: 0).__name__)):
-            raise AirflowException('{} only supports functions for python_callable arg',
-                                   self.__class__.__name__)
+            raise AirflowException('{} only supports functions for python_callable arg'.format(
+                self.__class__.__name__))
         # check that args are passed iff python major version matches
         if (python_version is not None and
            str(python_version)[0] != str(sys.version_info[0]) and
@@ -366,7 +364,7 @@ class PythonVirtualenvOperator(PythonOperator):
     def _write_script(self, script_filename):
         with open(script_filename, 'w') as file:
             python_code = self._generate_python_code()
-            self.log.debug('Writing code to file\n', python_code)
+            self.log.debug('Writing code to file\n %s', python_code)
             file.write(python_code)
 
     @staticmethod
@@ -381,7 +379,7 @@ class PythonVirtualenvOperator(PythonOperator):
             pickling_library = 'dill'
         else:
             pickling_library = 'pickle'
-        fn = self.python_callable
+
         # dont try to read pickle if we didnt pass anything
         if self._pass_op_args():
             load_args_line = 'with open(sys.argv[1], "rb") as file: arg_dict = {}.load(file)' \
@@ -405,6 +403,6 @@ class PythonVirtualenvOperator(PythonOperator):
         with open(sys.argv[2], 'wb') as file:
             res is not None and {pickling_library}.dump(res, file)
         """).format(load_args_code=load_args_line,
-                    python_callable_lines=dedent(inspect.getsource(fn)),
-                    python_callable_name=fn.__name__,
+                    python_callable_lines=dedent(inspect.getsource(self.python_callable)),
+                    python_callable_name=self.python_callable.__name__,
                     pickling_library=pickling_library)

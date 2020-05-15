@@ -25,8 +25,9 @@ import imaplib
 import os
 import re
 
-from airflow import AirflowException, LoggingMixin
+from airflow.exceptions import AirflowException
 from airflow.hooks.base_hook import BaseHook
+from airflow.utils.log.logging_mixin import LoggingMixin
 
 
 class ImapHook(BaseHook):
@@ -41,6 +42,7 @@ class ImapHook(BaseHook):
     """
 
     def __init__(self, imap_conn_id='imap_default'):
+        super().__init__()
         self.imap_conn_id = imap_conn_id
         self.mail_client = None
 

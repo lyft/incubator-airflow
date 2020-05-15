@@ -19,8 +19,8 @@ import unittest
 
 import mock
 
-from airflow import DAG
 from airflow.models import TaskInstance
+from airflow.models.dag import DAG
 from airflow.providers.amazon.aws.operators.mongo_to_s3 import MongoToS3Operator
 from airflow.utils import timezone
 
@@ -110,7 +110,3 @@ class TestMongoToS3Operator(unittest.TestCase):
             bucket_name=S3_BUCKET,
             replace=False
         )
-
-
-if __name__ == '__main__':
-    unittest.main()

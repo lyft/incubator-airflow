@@ -25,7 +25,7 @@ from typing import Dict, Optional, Union
 from google.api_core.retry import Retry
 from google.cloud.texttospeech_v1.types import AudioConfig, SynthesisInput, VoiceSelectionParams
 
-from airflow import AirflowException
+from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator
 from airflow.providers.google.cloud.hooks.gcs import GCSHook
 from airflow.providers.google.cloud.hooks.text_to_speech import CloudTextToSpeechHook
@@ -38,7 +38,7 @@ class CloudTextToSpeechSynthesizeOperator(BaseOperator):
 
     .. seealso::
         For more information on how to use this operator, take a look at the guide:
-        :ref:`howto/operator:GcpTextToSpeechSynthesizeOperator`
+        :ref:`howto/operator:CloudTextToSpeechSynthesizeOperator`
 
     :param input_data: text input to be synthesized. See more:
         https://googleapis.github.io/google-cloud-python/latest/texttospeech/gapic/v1/types.html#google.cloud.texttospeech_v1.types.SynthesisInput

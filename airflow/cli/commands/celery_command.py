@@ -22,6 +22,7 @@ from typing import Optional
 
 import daemon
 import psutil
+from celery import maybe_patch_concurrency
 from celery.bin import worker as worker_bin
 from daemon.pidfile import TimeoutPIDLockFile
 from flower.command import FlowerCommand
@@ -47,13 +48,13 @@ def flower(args):
     ]
 
     if args.broker_api:
-        options.append(f"--broker_api={args.broker_api}")
+        options.append(f"--broker-api={args.broker_api}")
 
     if args.url_prefix:
         options.append(f"--url-prefix={args.url_prefix}")
 
     if args.basic_auth:
-        options.append(f"--basic_auth={args.basic_auth}")
+        options.append(f"--basic-auth={args.basic_auth}")
 
     if args.flower_conf:
         options.append(f"--conf={args.flower_conf}")
@@ -125,7 +126,14 @@ def worker(args):
     }
 
     if conf.has_option("celery", "pool"):
-        options["pool"] = conf.get("celery", "pool")
+        pool = conf.get("celery", "pool")
+        options["pool"] = pool
+        # Celery pools of type eventlet and gevent use greenlets, which
+        # requires monkey patching the app:
+        # https://eventlet.net/doc/patching.html#monkey-patch
+        # Otherwise task instances hang on the workers and are never
+        # executed.
+        maybe_patch_concurrency(['-P', pool])
 
     if args.daemon:
         # Run Celery worker as daemon
@@ -133,8 +141,12 @@ def worker(args):
         stdout = open(stdout, 'w+')
         stderr = open(stderr, 'w+')
 
+        if args.umask:
+            umask = args.umask
+
         ctx = daemon.DaemonContext(
             files_preserve=[handle],
+            umask=int(umask, 8),
             stdout=stdout,
             stderr=stderr,
         )

@@ -55,13 +55,13 @@ Homebrew for macOS to install required software packages:
 * MySQL
 * libxml
 
-Refer to the `Dockerfile <Dockerfile>`__ for a comprehensive list
+Refer to the `Dockerfile.ci <Dockerfile.ci>`__ for a comprehensive list
 of required packages.
 
 Extra Packages
 --------------
 
-You can also install extra packages (like ``[gcp]``, etc) via
+You can also install extra packages (like ``[ssh]``, etc) via
 ``pip install -e [EXTRA1,EXTRA2 ...]``. However, some of them may
 have additional install and setup requirements for your local system.
 
@@ -145,7 +145,7 @@ Simply enter the Breeze environment by using ``workon`` and, once you are in it,
 
 .. code-block:: bash
 
-  ./breeze --initialize-local-virtualenv
+  ./breeze initialize-local-virtualenv
 
 Running Tests
 -------------

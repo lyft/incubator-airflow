@@ -15,6 +15,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+import ast
+
 from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator
 from airflow.providers.amazon.aws.hooks.emr import EmrHook
@@ -36,13 +38,14 @@ class EmrAddStepsOperator(BaseOperator):
     :type cluster_states: list
     :param aws_conn_id: aws connection to uses
     :type aws_conn_id: str
-    :param steps: boto3 style steps to be added to the jobflow. (templated)
-    :type steps: list
+    :param steps: boto3 style steps or reference to a steps file (must be '.json') to
+        be added to the jobflow. (templated)
+    :type steps: list|str
     :param do_xcom_push: if True, job_flow_id is pushed to XCom with key job_flow_id.
     :type do_xcom_push: bool
     """
     template_fields = ['job_flow_id', 'job_flow_name', 'cluster_states', 'steps']
-    template_ext = ()
+    template_ext = ('.json',)
     ui_color = '#f9c915'
 
     @apply_defaults
@@ -80,7 +83,14 @@ class EmrAddStepsOperator(BaseOperator):
             context['ti'].xcom_push(key='job_flow_id', value=job_flow_id)
 
         self.log.info('Adding steps to %s', job_flow_id)
-        response = emr.add_job_flow_steps(JobFlowId=job_flow_id, Steps=self.steps)
+
+        # steps may arrive as a string representing a list
+        # e.g. if we used XCom or a file then: steps="[{ step1 }, { step2 }]"
+        steps = self.steps
+        if isinstance(steps, str):
+            steps = ast.literal_eval(steps)
+
+        response = emr.add_job_flow_steps(JobFlowId=job_flow_id, Steps=steps)
 
         if not response['ResponseMetadata']['HTTPStatusCode'] == 200:
             raise AirflowException('Adding steps failed: %s' % response)

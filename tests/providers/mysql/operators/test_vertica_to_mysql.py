@@ -20,7 +20,7 @@ import datetime
 import unittest
 from unittest import mock
 
-from airflow import DAG
+from airflow.models.dag import DAG
 from airflow.providers.mysql.operators.vertica_to_mysql import VerticaToMySqlTransfer
 
 
@@ -87,7 +87,3 @@ class TestVerticaToMySqlTransfer(unittest.TestCase):
                                       bulk_load=True,
                                       dag=self.dag)
         task.execute(None)
-
-
-if __name__ == '__main__':
-    unittest.main()

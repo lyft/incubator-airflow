@@ -29,8 +29,8 @@ HOOK = [
         "airflow.contrib.hooks.gcp_compute_hook.GceHook",
     ),
     (
-        "airflow.providers.google.cloud.hooks.base.CloudBaseHook",
-        "airflow.contrib.hooks.gcp_api_base_hook.GoogleCloudBaseHook",
+        "airflow.providers.google.common.hooks.base_google.GoogleBaseHook",
+        "airflow.contrib.hooks.gcp_api_base_hook.GoogleBaseHook",
     ),
     (
         "airflow.providers.google.cloud.hooks.dataflow.DataflowHook",
@@ -262,7 +262,7 @@ HOOK = [
         'airflow.contrib.hooks.mongo_hook.MongoHook',
     ),
     (
-        'airflow.providers.openfass.hooks.openfaas.OpenFaasHook',
+        'airflow.providers.openfaas.hooks.openfaas.OpenFaasHook',
         'airflow.contrib.hooks.openfaas_hook.OpenFaasHook',
     ),
     (
@@ -745,8 +745,8 @@ OPERATOR = [
         "airflow.contrib.operators.gcp_translate_operator.CloudTranslateTextOperator",
     ),
     (
-        "airflow.providers.google.cloud.operators.translate_speech.GcpTranslateSpeechOperator",
-        "airflow.contrib.operators.gcp_translate_speech_operator.GcpTranslateSpeechOperator",
+        "airflow.providers.google.cloud.operators.translate_speech.CloudTranslateSpeechOperator",
+        "airflow.contrib.operators.gcp_translate_speech_operator.CloudTranslateSpeechOperator",
     ),
     (
         "airflow.providers.google.cloud.operators.video_intelligence."
@@ -1180,15 +1180,15 @@ OPERATOR = [
         'airflow.operators.papermill_operator.PapermillOperator',
     ),
     (
-        'airflow.providers.presto.operators.presto_check.PrestoCheckOperator',
+        'airflow.operators.check_operator.CheckOperator',
         'airflow.operators.presto_check_operator.PrestoCheckOperator',
     ),
     (
-        'airflow.providers.presto.operators.presto_check.PrestoIntervalCheckOperator',
+        'airflow.operators.check_operator.IntervalCheckOperator',
         'airflow.operators.presto_check_operator.PrestoIntervalCheckOperator',
     ),
     (
-        'airflow.providers.presto.operators.presto_check.PrestoValueCheckOperator',
+        'airflow.operators.check_operator.ValueCheckOperator',
         'airflow.operators.presto_check_operator.PrestoValueCheckOperator',
     ),
     (
@@ -1388,6 +1388,70 @@ OPERATOR = [
     (
         'airflow.providers.mysql.operators.presto_to_mysql.PrestoToMySqlTransfer',
         'airflow.operators.presto_to_mysql.PrestoToMySqlTransfer',
+    ),
+    (
+        'airflow.providers.google.cloud.operators.cloud_sql.CloudSQLBaseOperator',
+        'airflow.contrib.operators.gcp_sql_operator.CloudSqlBaseOperator'
+    ),
+    (
+        'airflow.providers.google.cloud.operators.cloud_sql.CloudSQLCreateInstanceDatabaseOperator',
+        'airflow.contrib.operators.gcp_sql_operator.CloudSqlInstanceDatabaseCreateOperator'
+    ),
+    (
+        'airflow.providers.google.cloud.operators.cloud_sql.CloudSQLCreateInstanceOperator',
+        'airflow.contrib.operators.gcp_sql_operator.CloudSqlInstanceCreateOperator'
+    ),
+    (
+        'airflow.providers.google.cloud.operators.cloud_sql.CloudSQLDeleteInstanceDatabaseOperator',
+        'airflow.contrib.operators.gcp_sql_operator.CloudSqlInstanceDatabaseDeleteOperator'
+    ),
+    (
+        'airflow.providers.google.cloud.operators.cloud_sql.CloudSQLDeleteInstanceOperator',
+        'airflow.contrib.operators.gcp_sql_operator.CloudSqlInstanceDeleteOperator'
+    ),
+    (
+        'airflow.providers.google.cloud.operators.cloud_sql.CloudSQLExecuteQueryOperator',
+        'airflow.contrib.operators.gcp_sql_operator.CloudSqlQueryOperator'
+    ),
+    (
+        'airflow.providers.google.cloud.operators.cloud_sql.CloudSQLExportInstanceOperator',
+        'airflow.contrib.operators.gcp_sql_operator.CloudSqlInstanceExportOperator'
+    ),
+    (
+        'airflow.providers.google.cloud.operators.cloud_sql.CloudSQLImportInstanceOperator',
+        'airflow.contrib.operators.gcp_sql_operator.CloudSqlInstanceImportOperator'
+    ),
+    (
+        'airflow.providers.google.cloud.operators.cloud_sql.CloudSQLInstancePatchOperator',
+        'airflow.contrib.operators.gcp_sql_operator.CloudSqlInstancePatchOperator'
+    ),
+    (
+        'airflow.providers.google.cloud.operators.cloud_sql.CloudSQLPatchInstanceDatabaseOperator',
+        'airflow.contrib.operators.gcp_sql_operator.CloudSqlInstanceDatabasePatchOperator'
+    ),
+    (
+        'airflow.providers.google.cloud.operators.cloud_storage_transfer_service'
+        '.CloudDataTransferServiceS3ToGCSOperator',
+        'airflow.contrib.operators.s3_to_gcs_transfer_operator.CloudDataTransferServiceS3ToGCSOperator'
+    ),
+]
+
+SECRETS = [
+    (
+        "airflow.providers.amazon.aws.secrets.secrets_manager.SecretsManagerBackend",
+        "airflow.contrib.secrets.aws_secrets_manager.SecretsManagerBackend",
+    ),
+    (
+        "airflow.providers.amazon.aws.secrets.systems_manager.SystemsManagerParameterStoreBackend",
+        "airflow.contrib.secrets.aws_systems_manager.SystemsManagerParameterStoreBackend",
+    ),
+    (
+        "airflow.providers.google.cloud.secrets.secrets_manager.CloudSecretsManagerBackend",
+        "airflow.contrib.secrets.gcp_secrets_manager.CloudSecretsManagerBackend",
+    ),
+    (
+        "airflow.providers.hashicorp.secrets.vault.VaultBackend",
+        "airflow.contrib.secrets.hashicorp_vault.VaultBackend",
     ),
 ]
 
@@ -1596,11 +1660,11 @@ PROTOCOLS = [
     ),
 ]
 
-ALL = HOOK + OPERATOR + SENSOR + PROTOCOLS
+ALL = HOOK + OPERATOR + SECRETS + SENSOR + PROTOCOLS
 
 RENAMED_HOOKS = [
     (old_class, new_class)
-    for old_class, new_class in HOOK + OPERATOR + SENSOR
+    for old_class, new_class in HOOK + OPERATOR + SECRETS + SENSOR
     if old_class.rpartition(".")[2] != new_class.rpartition(".")[2]
 ]
 

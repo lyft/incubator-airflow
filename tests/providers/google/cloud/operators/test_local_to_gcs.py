@@ -22,7 +22,7 @@ import unittest
 
 import mock
 
-from airflow import DAG
+from airflow.models.dag import DAG
 from airflow.providers.google.cloud.operators.local_to_gcs import LocalFilesystemToGCSOperator
 
 
@@ -72,7 +72,3 @@ class TestFileToGcsOperator(unittest.TestCase):
             mime_type=self._config['mime_type'],
             object_name=self._config['dst']
         )
-
-
-if __name__ == '__main__':
-    unittest.main()

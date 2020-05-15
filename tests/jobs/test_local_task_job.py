@@ -24,15 +24,20 @@ import unittest
 import pytest
 from mock import patch
 
-from airflow import AirflowException, models, settings
+from airflow import settings
+from airflow.exceptions import AirflowException
 from airflow.executors.sequential_executor import SequentialExecutor
-from airflow.jobs import LocalTaskJob
-from airflow.models import DAG, TaskInstance as TI
+from airflow.jobs.local_task_job import LocalTaskJob
+from airflow.models.dag import DAG
+from airflow.models.dagbag import DagBag
+from airflow.models.taskinstance import TaskInstance
 from airflow.operators.dummy_operator import DummyOperator
+from airflow.operators.python import PythonOperator
 from airflow.utils import timezone
 from airflow.utils.net import get_hostname
 from airflow.utils.session import create_session
 from airflow.utils.state import State
+from airflow.utils.timeout import timeout
 from tests.test_utils.db import clear_db_runs
 from tests.test_utils.mock_executor import MockExecutor
 
@@ -128,7 +133,7 @@ class TestLocalTaskJob(unittest.TestCase):
         self.mock_base_job_sleep.side_effect = time.sleep
 
         with create_session() as session:
-            dagbag = models.DagBag(
+            dagbag = DagBag(
                 dag_folder=TEST_DAG_FOLDER,
                 include_examples=False,
             )
@@ -142,7 +147,7 @@ class TestLocalTaskJob(unittest.TestCase):
                               execution_date=DEFAULT_DATE,
                               start_date=DEFAULT_DATE,
                               session=session)
-            ti = TI(task=task, execution_date=DEFAULT_DATE)
+            ti = TaskInstance(task=task, execution_date=DEFAULT_DATE)
             ti.refresh_from_db()
             ti.state = State.RUNNING
             ti.hostname = get_hostname()
@@ -168,7 +173,7 @@ class TestLocalTaskJob(unittest.TestCase):
         Test that ensures that mark_success in the UI doesn't cause
         the task to fail, and that the task exits
         """
-        dagbag = models.DagBag(
+        dagbag = DagBag(
             dag_folder=TEST_DAG_FOLDER,
             include_examples=False,
         )
@@ -183,7 +188,7 @@ class TestLocalTaskJob(unittest.TestCase):
                           execution_date=DEFAULT_DATE,
                           start_date=DEFAULT_DATE,
                           session=session)
-        ti = TI(task=task, execution_date=DEFAULT_DATE)
+        ti = TaskInstance(task=task, execution_date=DEFAULT_DATE)
         ti.refresh_from_db()
         job1 = LocalTaskJob(task_instance=ti, ignore_ti_state=True)
         process = multiprocessing.Process(target=job1.run)
@@ -205,7 +210,7 @@ class TestLocalTaskJob(unittest.TestCase):
         self.assertEqual(State.SUCCESS, ti.state)
 
     def test_localtaskjob_double_trigger(self):
-        dagbag = models.DagBag(
+        dagbag = DagBag(
             dag_folder=TEST_DAG_FOLDER,
             include_examples=False,
         )
@@ -227,7 +232,7 @@ class TestLocalTaskJob(unittest.TestCase):
         session.merge(ti)
         session.commit()
 
-        ti_run = TI(task=task, execution_date=DEFAULT_DATE)
+        ti_run = TaskInstance(task=task, execution_date=DEFAULT_DATE)
         ti_run.refresh_from_db()
         job1 = LocalTaskJob(task_instance=ti_run,
                             executor=SequentialExecutor())
@@ -242,8 +247,9 @@ class TestLocalTaskJob(unittest.TestCase):
 
         session.close()
 
+    @pytest.mark.quarantined
     def test_localtaskjob_maintain_heart_rate(self):
-        dagbag = models.DagBag(
+        dagbag = DagBag(
             dag_folder=TEST_DAG_FOLDER,
             include_examples=False,
         )
@@ -259,7 +265,7 @@ class TestLocalTaskJob(unittest.TestCase):
                           start_date=DEFAULT_DATE,
                           session=session)
 
-        ti_run = TI(task=task, execution_date=DEFAULT_DATE)
+        ti_run = TaskInstance(task=task, execution_date=DEFAULT_DATE)
         ti_run.refresh_from_db()
         job1 = LocalTaskJob(task_instance=ti_run,
                             executor=SequentialExecutor())
@@ -299,18 +305,27 @@ class TestLocalTaskJob(unittest.TestCase):
         data = {'called': False}
 
         def check_failure(context):
-            self.assertEqual(context['dag_run'].dag_id,
-                             'test_mark_failure')
+            self.assertEqual(context['dag_run'].dag_id, 'test_mark_failure')
             data['called'] = True
 
-        dag = DAG(dag_id='test_mark_failure',
-                  start_date=DEFAULT_DATE,
-                  default_args={'owner': 'owner1'})
+        def task_function(ti):
+            print("python_callable run in pid %s", os.getpid())
+            with create_session() as session:
+                self.assertEqual(State.RUNNING, ti.state)
+                ti.log.info("Marking TI as failed 'externally'")
+                ti.state = State.FAILED
+                session.merge(ti)
+                session.commit()
 
-        task = DummyOperator(
-            task_id='test_state_succeeded1',
-            dag=dag,
-            on_failure_callback=check_failure)
+            time.sleep(60)
+            # This should not happen -- the state change should be noticed and the task should get killed
+            data['reached_end_of_sleep'] = True
+
+        with DAG(dag_id='test_mark_failure', start_date=DEFAULT_DATE) as dag:
+            task = PythonOperator(
+                task_id='test_state_succeeded1',
+                python_callable=task_function,
+                on_failure_callback=check_failure)
 
         session = settings.Session()
 
@@ -320,7 +335,54 @@ class TestLocalTaskJob(unittest.TestCase):
                           execution_date=DEFAULT_DATE,
                           start_date=DEFAULT_DATE,
                           session=session)
-        ti = TI(task=task, execution_date=DEFAULT_DATE)
+        ti = TaskInstance(task=task, execution_date=DEFAULT_DATE)
+        ti.refresh_from_db()
+
+        job1 = LocalTaskJob(task_instance=ti,
+                            ignore_ti_state=True,
+                            executor=SequentialExecutor())
+        with timeout(30):
+            # This should be _much_ shorter to run.
+            # If you change this limit, make the timeout in the callbable above bigger
+            job1.run()
+
+        ti.refresh_from_db()
+        self.assertEqual(ti.state, State.FAILED)
+        self.assertTrue(data['called'])
+        self.assertNotIn('reached_end_of_sleep', data,
+                         'Task should not have been allowed to run to completion')
+
+    @pytest.mark.quarantined
+    def test_mark_success_on_success_callback(self):
+        """
+        Test that ensures that where a task is marked suceess in the UI
+        on_success_callback gets executed
+        """
+        data = {'called': False}
+
+        def success_callback(context):
+            self.assertEqual(context['dag_run'].dag_id,
+                             'test_mark_success')
+            data['called'] = True
+
+        dag = DAG(dag_id='test_mark_success',
+                  start_date=DEFAULT_DATE,
+                  default_args={'owner': 'owner1'})
+
+        task = DummyOperator(
+            task_id='test_state_succeeded1',
+            dag=dag,
+            on_success_callback=success_callback)
+
+        session = settings.Session()
+
+        dag.clear()
+        dag.create_dagrun(run_id="test",
+                          state=State.RUNNING,
+                          execution_date=DEFAULT_DATE,
+                          start_date=DEFAULT_DATE,
+                          session=session)
+        ti = TaskInstance(task=task, execution_date=DEFAULT_DATE)
         ti.refresh_from_db()
         job1 = LocalTaskJob(task_instance=ti,
                             ignore_ti_state=True,
@@ -336,7 +398,7 @@ class TestLocalTaskJob(unittest.TestCase):
             time.sleep(0.1)
             ti.refresh_from_db()
         self.assertEqual(State.RUNNING, ti.state)
-        ti.state = State.FAILED
+        ti.state = State.SUCCESS
         session.merge(ti)
         session.commit()
 

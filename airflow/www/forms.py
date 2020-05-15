@@ -17,9 +17,10 @@
 # under the License.
 
 import json
+from operator import itemgetter
 
 from flask_appbuilder.fieldwidgets import (
-    BS3PasswordFieldWidget, BS3TextAreaFieldWidget, BS3TextFieldWidget, DateTimePickerWidget, Select2Widget,
+    BS3PasswordFieldWidget, BS3TextAreaFieldWidget, BS3TextFieldWidget, Select2Widget,
 )
 from flask_appbuilder.forms import DynamicForm
 from flask_babel import lazy_gettext
@@ -32,19 +33,20 @@ from wtforms.fields import (
 from airflow.models import Connection
 from airflow.utils import timezone
 from airflow.www.validators import ValidJson
+from airflow.www.widgets import AirflowDateTimePickerWidget
 
 
 class DateTimeForm(FlaskForm):
     # Date filter form needed for task views
     execution_date = DateTimeField(
-        "Execution date", widget=DateTimePickerWidget())
+        "Execution date", widget=AirflowDateTimePickerWidget())
 
 
 class DateTimeWithNumRunsForm(FlaskForm):
     # Date time and number of runs form for tree view, task duration
     # and landing times
     base_date = DateTimeField(
-        "Anchor date", widget=DateTimePickerWidget(), default=timezone.utcnow())
+        "Anchor date", widget=AirflowDateTimePickerWidget(), default=timezone.utcnow())
     num_runs = SelectField("Number of runs", default=25, choices=(
         (5, "5"),
         (25, "25"),
@@ -66,10 +68,10 @@ class DagRunForm(DynamicForm):
         widget=BS3TextFieldWidget())
     start_date = DateTimeField(
         lazy_gettext('Start Date'),
-        widget=DateTimePickerWidget())
+        widget=AirflowDateTimePickerWidget())
     end_date = DateTimeField(
         lazy_gettext('End Date'),
-        widget=DateTimePickerWidget())
+        widget=AirflowDateTimePickerWidget())
     run_id = StringField(
         lazy_gettext('Run Id'),
         validators=[validators.DataRequired()],
@@ -80,7 +82,7 @@ class DagRunForm(DynamicForm):
         widget=Select2Widget())
     execution_date = DateTimeField(
         lazy_gettext('Execution Date'),
-        widget=DateTimePickerWidget())
+        widget=AirflowDateTimePickerWidget())
     external_trigger = BooleanField(
         lazy_gettext('External Trigger'))
     conf = TextAreaField(
@@ -103,7 +105,7 @@ class ConnectionForm(DynamicForm):
         widget=BS3TextFieldWidget())
     conn_type = SelectField(
         lazy_gettext('Conn Type'),
-        choices=Connection._types,
+        choices=sorted(Connection._types, key=itemgetter(1)),
         widget=Select2Widget())
     host = StringField(
         lazy_gettext('Host'),
@@ -192,3 +194,11 @@ class ConnectionForm(DynamicForm):
         description='Optional. This key will be placed to all created Compute nodes'
         'to let you have a root shell there',
     )
+    extra__kubernetes__in_cluster = BooleanField(
+        lazy_gettext('In cluster configuration'))
+    extra__kubernetes__kube_config = StringField(
+        lazy_gettext('Kube config (JSON format)'),
+        widget=BS3TextFieldWidget())
+    extra__kubernetes__namespace = StringField(
+        lazy_gettext('Namespace'),
+        widget=BS3TextFieldWidget())

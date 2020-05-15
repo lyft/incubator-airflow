@@ -31,13 +31,10 @@ MISSING_TEST_FILES = {
     'tests/providers/apache/cassandra/sensors/test_table.py',
     'tests/providers/apache/hdfs/sensors/test_web_hdfs.py',
     'tests/providers/apache/hive/operators/test_vertica_to_hive.py',
-    'tests/providers/apache/hive/sensors/test_hive_partition.py',
-    'tests/providers/apache/hive/sensors/test_metastore_partition.py',
     'tests/providers/apache/pig/operators/test_pig.py',
     'tests/providers/apache/spark/hooks/test_spark_jdbc_script.py',
     'tests/providers/cncf/kubernetes/operators/test_kubernetes_pod.py',
     'tests/providers/google/cloud/operators/test_datastore.py',
-    'tests/providers/google/cloud/operators/test_gcs_to_bigquery.py',
     'tests/providers/google/cloud/operators/test_sql_to_gcs.py',
     'tests/providers/google/cloud/sensors/test_bigquery.py',
     'tests/providers/google/cloud/utils/test_field_sanitizer.py',
@@ -47,13 +44,10 @@ MISSING_TEST_FILES = {
     'tests/providers/jenkins/hooks/test_jenkins.py',
     'tests/providers/microsoft/azure/sensors/test_azure_cosmos.py',
     'tests/providers/microsoft/mssql/hooks/test_mssql.py',
-    'tests/providers/microsoft/mssql/operators/test_mssql.py',
     'tests/providers/oracle/operators/test_oracle.py',
-    'tests/providers/presto/operators/test_presto_check.py',
     'tests/providers/qubole/hooks/test_qubole.py',
     'tests/providers/samba/hooks/test_samba.py',
-    'tests/providers/sqlite/operators/test_sqlite.py',
-    'tests/providers/vertica/hooks/test_vertica.py'
+    'tests/providers/yandex/hooks/test_yandex.py'
 }
 
 
@@ -135,25 +129,20 @@ class TestProjectStructure(unittest.TestCase):
 
 class TestGoogleProviderProjectStructure(unittest.TestCase):
     MISSING_EXAMPLE_DAGS = {
-        ('cloud', 'text_to_speech'),
-        ('cloud', 'gcs_to_bigquery'),
         ('cloud', 'adls_to_gcs'),
         ('cloud', 'sql_to_gcs'),
         ('cloud', 's3_to_gcs'),
-        ('cloud', 'translate_speech'),
         ('cloud', 'bigquery_to_mysql'),
-        ('cloud', 'speech_to_text'),
         ('cloud', 'cassandra_to_gcs'),
-        ('cloud', 'bigquery_to_bigquery'),
         ('cloud', 'mysql_to_gcs'),
         ('cloud', 'mssql_to_gcs'),
-        ('cloud', 'bigquery_to_gcs'),
-        ('cloud', 'local_to_gcs')
+        ('cloud', 'local_to_gcs'),
+        ('cloud', 'sheets_to_gcs'),
+        ('suite', 'gcs_to_sheets'),
     }
 
     MISSING_DOC_GUIDES = {
         'adls_to_gcs',
-        'bigquery',
         'bigquery_to_bigquery',
         'bigquery_to_gcs',
         'bigquery_to_mysql',
@@ -170,11 +159,8 @@ class TestGoogleProviderProjectStructure(unittest.TestCase):
         'mysql_to_gcs',
         'postgres_to_gcs',
         's3_to_gcs',
-        'speech_to_text',
         'sql_to_gcs',
         'tasks',
-        'text_to_speech',
-        'translate_speech'
     }
 
     def test_example_dags(self):

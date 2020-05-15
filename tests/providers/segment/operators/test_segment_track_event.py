@@ -19,7 +19,7 @@
 import unittest
 from unittest import mock
 
-from airflow import AirflowException
+from airflow.exceptions import AirflowException
 from airflow.providers.segment.hooks.segment import SegmentHook
 from airflow.providers.segment.operators.segment_track_event import SegmentTrackEventOperator
 
@@ -83,7 +83,3 @@ class TestSegmentTrackEventOperator(unittest.TestCase):
             event=event,
             properties=properties,
         )
-
-
-if __name__ == '__main__':
-    unittest.main()

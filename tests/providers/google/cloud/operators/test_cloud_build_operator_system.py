@@ -16,15 +16,16 @@
 # specific language governing permissions and limitations
 # under the License.
 """System tests for Google Cloud Build operators"""
+import pytest
 
 from tests.providers.google.cloud.operators.test_cloud_build_system_helper import GCPCloudBuildTestHelper
 from tests.providers.google.cloud.utils.gcp_authenticator import GCP_CLOUD_BUILD_KEY
-from tests.test_utils.gcp_system_helpers import CLOUD_DAG_FOLDER, provide_gcp_context, skip_gcp_system
-from tests.test_utils.system_tests_class import SystemTest
+from tests.test_utils.gcp_system_helpers import CLOUD_DAG_FOLDER, GoogleSystemTest, provide_gcp_context
 
 
-@skip_gcp_system(GCP_CLOUD_BUILD_KEY, require_local_executor=True)
-class CloudBuildExampleDagsSystemTest(SystemTest):
+@pytest.mark.backend("mysql", "postgres")
+@pytest.mark.credential_file(GCP_CLOUD_BUILD_KEY)
+class CloudBuildExampleDagsSystemTest(GoogleSystemTest):
     """
     System tests for Google Cloud Build operators
 
@@ -32,7 +33,7 @@ class CloudBuildExampleDagsSystemTest(SystemTest):
     """
     helper = GCPCloudBuildTestHelper()
 
-    @provide_gcp_context(GCP_CLOUD_BUILD_KEY)
+    @provide_gcp_context(GCP_CLOUD_BUILD_KEY, project_id=GoogleSystemTest._project_id())
     def setUp(self):
         super().setUp()
         self.helper.create_repository_and_bucket()
@@ -41,7 +42,7 @@ class CloudBuildExampleDagsSystemTest(SystemTest):
     def test_run_example_dag(self):
         self.run_dag("example_gcp_cloud_build", CLOUD_DAG_FOLDER)
 
-    @provide_gcp_context(GCP_CLOUD_BUILD_KEY)
+    @provide_gcp_context(GCP_CLOUD_BUILD_KEY, project_id=GoogleSystemTest._project_id())
     def tearDown(self):
         self.helper.delete_bucket()
         self.helper.delete_docker_images()

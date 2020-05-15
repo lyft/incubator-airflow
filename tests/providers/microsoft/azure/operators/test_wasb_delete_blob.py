@@ -22,7 +22,7 @@ import unittest
 
 import mock
 
-from airflow import DAG
+from airflow.models.dag import DAG
 from airflow.providers.microsoft.azure.operators.wasb_delete_blob import WasbDeleteBlobOperator
 
 
@@ -77,7 +77,3 @@ class TestWasbDeleteBlobOperator(unittest.TestCase):
         mock_instance.delete_file.assert_called_once_with(
             'container', 'blob', True, True
         )
-
-
-if __name__ == '__main__':
-    unittest.main()

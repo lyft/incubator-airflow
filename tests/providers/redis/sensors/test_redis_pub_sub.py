@@ -22,7 +22,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from airflow import DAG
+from airflow.models.dag import DAG
 from airflow.providers.redis.hooks.redis import RedisHook
 from airflow.providers.redis.sensors.redis_pub_sub import RedisPubSubSensor
 from airflow.utils import timezone
@@ -120,7 +120,3 @@ class TestRedisPubSubSensor(unittest.TestCase):
         result = sensor.poke(self.mock_context)
         self.assertFalse(result)
         self.assertTrue(self.mock_context['ti'].method_calls == [], "context calls should be same")
-
-
-if __name__ == '__main__':
-    unittest.main()

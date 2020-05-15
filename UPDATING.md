@@ -26,6 +26,7 @@ assists users migrating to a new version.
 **Table of contents**
 
 - [Airflow Master](#airflow-master)
+- [Airflow 1.10.10](#airflow-11010)
 - [Airflow 1.10.9](#airflow-1109)
 - [Airflow 1.10.8](#airflow-1108)
 - [Airflow 1.10.7](#airflow-1107)
@@ -60,6 +61,216 @@ More tips can be found in the guide:
 https://developers.google.com/style/inclusive-documentation
 
 -->
+
+### Standardised "extra" requirements
+
+We standardised the Extras names and synchronized providers package names with the main airflow extras.
+
+We deprecated a number of extras in 2.0.
+
+| Deprecated extras | New extras       |
+|-------------------|------------------|
+| atlas             | apache.atlas     |
+| aws               | amazon           |
+| azure             | microsoft.azure  |
+| cassandra         | apache.cassandra |
+| druid             | apache.druid     |
+| gcp               | google           |
+| gcp_api           | google           |
+| hdfs              | apache.hdfs      |
+| hive              | apache.hive      |
+| kubernetes        | cncf.kubernetes  |
+| mssql             | microsoft.mssql  |
+| pinot             | apache.pinot     |
+| webhdfs           | apache.webhdfs   |
+| winrm             | apache.winrm     |
+
+For example instead of `pip install apache-airflow[atlas]` you should use
+`pip install apache-airflow[apache.atlas]` .
+
+The deprecated extras will be removed in 2.1:
+
+
+### Skipped tasks can satisfy wait_for_downstream
+
+Previously, a task instance with `wait_for_downstream=True` will only run if the downstream task of
+the previous task instance is successful. Meanwhile, a task instance with `depends_on_past=True`
+will run if the previous task instance is either successful or skipped. These two flags are close siblings
+yet they have different behavior. This inconsistency in behavior made the API less intuitive to users.
+To maintain consistent behavior, both successful or skipped downstream task can now satisfy the
+`wait_for_downstream=True` flag.
+
+
+### Ability to patch Pool.DEFAULT_POOL_NAME in BaseOperator
+It was not possible to patch pool in BaseOperator as the signature sets the default value of pool
+as Pool.DEFAULT_POOL_NAME.
+While using subdagoperator in unittest(without initializing the sqlite db), it was throwing the
+following error:
+```
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) no such table: slot_pool.
+```
+Fix for this, https://github.com/apache/airflow/pull/8587
+
+### Change signature of BigQueryGetDatasetTablesOperator
+Was:
+```python
+BigQueryGetDatasetTablesOperator(dataset_id: str, dataset_resource: dict, ...)
+```
+and now it is:
+```python
+BigQueryGetDatasetTablesOperator(dataset_resource: dict, dataset_id: Optional[str] = None, ...)
+```
+
+### Unify `hostname_callable` option in `core` section
+
+The previous option used a colon(`:`) to split the module from function. Now the dot(`.`) is used.
+
+The change aims to unify the format of all options that refer to objects in the `airflow.cfg` file.
+
+### Changes in BigQueryHook
+In general all hook methods are decorated with `@GoogleBaseHook.fallback_to_default_project_id` thus
+parameters to hook can only be passed via keyword arguments.
+
+- `create_empty_table` method accepts now `table_resource` parameter. If provided all
+other parameters are ignored.
+- `create_empty_dataset` will now use values from `dataset_reference` instead of raising error
+if parameters were passed in `dataset_reference` and as arguments to method. Additionally validation
+of `dataset_reference` is done using `Dataset.from_api_repr`. Exception and log messages has been
+changed.
+- `update_dataset` requires now new `fields` argument (breaking change)
+- `delete_dataset` has new signature (dataset_id, project_id, ...)
+previous one was (project_id, dataset_id, ...) (breaking change)
+- `get_tabledata` returns list of rows instead of API response in dict format. This method is deprecated in
+ favor of `list_rows`. (breaking change)
+
+### Added mypy plugin to preserve types of decorated functions
+
+Mypy currently doesn't support precise type information for decorated
+functions; see https://github.com/python/mypy/issues/3157 for details.
+To preserve precise type definitions for decorated functions, we now
+include a mypy plugin to preserve precise type definitions for decorated
+functions. To use the plugin, update your setup.cfg:
+
+```
+[mypy]
+plugins =
+  airflow.mypy.plugin.decorators
+```
+
+### Use project_id argument consistently across GCP hooks and operators
+
+- Changed order of arguments in DataflowHook.start_python_dataflow. Uses
+    with positional arguments may break.
+- Changed order of arguments in DataflowHook.is_job_dataflow_running. Uses
+    with positional arguments may break.
+- Changed order of arguments in DataflowHook.cancel_job. Uses
+    with positional arguments may break.
+- Added optional project_id argument to DataflowCreateJavaJobOperator
+    constructor.
+- Added optional project_id argument to DataflowTemplatedJobStartOperator
+    constructor.
+- Added optional project_id argument to DataflowCreatePythonJobOperator
+    constructor.
+
+### Rename pool statsd metrics
+
+Used slot has been renamed to running slot to make the name self-explanatory
+and the code more maintainable.
+
+This means `pool.used_slots.<pool_name>` metric has been renamed to
+`pool.running_slots.<pool_name>`. The `Used Slots` column in Pools Web UI view
+has also been changed to `Running Slots`.
+
+### Remove SQL support in base_hook
+
+Remove ``get_records`` and ``get_pandas_df`` and ``run`` from base_hook, which only apply for sql like hook,
+If want to use them, or your custom hook inherit them, please use ``dbapi_hook``
+
+### Changes to SalesforceHook
+
+Replace parameter ``sandbox`` with ``domain``. According to change in simple-salesforce package
+
+### Rename parameter name in PinotAdminHook.create_segment
+
+Rename parameter name from ``format`` to ``segment_format`` in PinotAdminHook function create_segment fro pylint compatible
+
+### Rename parameter name in HiveMetastoreHook.get_partitions
+
+Rename parameter name from ``filter`` to ``partition_filter`` in HiveMetastoreHook function get_partitions for pylint compatible
+
+### Remove unnecessary parameter in FTPHook.list_directory
+
+Remove unnecessary parameter ``nlst`` in FTPHook function list_directory for pylint compatible
+
+### Remove unnecessary parameter in PostgresHook function copy_expert
+
+Remove unnecessary parameter ``open`` in PostgresHook function copy_expert for pylint compatible
+
+### Change parameter name in OpsgenieAlertOperator
+
+Change parameter name from ``visibleTo`` to ``visible_to`` in OpsgenieAlertOperator for pylint compatible
+
+### Use NULL as default value for dag.description
+
+Now use NULL as default value for dag.description in dag table
+
+### Assigning task to a DAG using bitwise shift (bit-shift) operators are no longer supported
+
+Previously, you could assign a task to a DAG as follows:
+
+```python
+dag = DAG('my_dag')
+dummy = DummyOperator(task_id='dummy')
+
+dag >> dummy
+```
+
+This is no longer supported. Instead, we recommend using the DAG as context manager:
+
+```python
+with DAG('my_dag'):
+    dummy = DummyOperator(task_id='dummy')
+```
+
+### Deprecating ignore_first_depends_on_past on backfill command and default it to True
+
+When doing backfill with `depends_on_past` dags, users will need to pass `--ignore-first-depends-on-past`.
+We should default it as `true` to avoid confusion
+
+### Custom executors is loaded using full import path
+
+In previous versions of Airflow it was possible to use plugins to load custom executors. It is still
+possible, but the configuration has changed. Now you don't have to create a plugin to configure a
+custom executor, but you need to provide the full path to the module in the `executor` option
+in the `core` section. The purpose of this change is to simplify the plugin mechanism and make
+it easier to configure executor.
+
+If your module was in the path `my_acme_company.executors.MyCustomExecutor`  and the plugin was
+called `my_plugin` then your configuration looks like this
+
+```ini
+[core]
+executor = my_plguin.MyCustomExecutor
+```
+And now it should look like this:
+```ini
+[core]
+executor = my_acme_company.executors.MyCustomExecutor
+```
+
+The old configuration is still works but can be abandoned at any time.
+
+### Removed sub-package imports from `airflow/__init__.py`
+
+The imports `LoggingMixin`, `conf`, and `AirflowException` have been removed from `airflow/__init__.py`.
+All implicit references of these objects will no longer be valid. To migrate, all usages of each old path must be
+replaced with its corresponding new path.
+
+| Old Path (Implicit Import)   | New Path (Explicit Import)                       |
+|------------------------------|--------------------------------------------------|
+| ``airflow.LoggingMixin``     | ``airflow.utils.log.logging_mixin.LoggingMixin`` |
+| ``airflow.conf``             | ``airflow.configuration.conf``                   |
+| ``airflow.AirflowException`` | ``airflow.exceptions.AirflowException``          |
 
 ### Added `airflow dags test` CLI command
 
@@ -129,7 +340,7 @@ The following methods were moved:
 ### Standardize handling http exception in BigQuery
 
 Since BigQuery is the part of the GCP it was possible to simplify the code by handling the exceptions
-by usage of the `airflow.providers.google.cloud.hooks.base.CloudBaseHook.catch_http_exception` decorator however it changes
+by usage of the `airflow.providers.google.common.hooks.base.GoogleBaseHook.catch_http_exception` decorator however it changes
 exceptions raised by the following methods:
 * `airflow.providers.google.cloud.hooks.bigquery.BigQueryBaseCursor.run_table_delete` raises `AirflowException` instead of `Exception`.
 * `airflow.providers.google.cloud.hooks.bigquery.BigQueryBaseCursor.create_empty_dataset` raises `AirflowException` instead of `ValueError`.
@@ -202,12 +413,89 @@ The following configurations have been moved from `[core]` to the new `[logging]
 
 ### Simplification of CLI commands
 
+#### Grouped to improve UX of CLI
+
 Some commands have been grouped to improve UX of CLI. New commands are available according to the following table:
 
 | Old command               | New command                        |
 |---------------------------|------------------------------------|
 | ``airflow worker``        | ``airflow celery worker``          |
 | ``airflow flower``        | ``airflow celery flower``          |
+
+#### Cli use exactly single character for short option style change
+
+For Airflow short option, use exactly one single character, New commands are available according to the following table:
+
+| Old command                                        | New command                                       |
+| :------------------------------------------------- | :------------------------------------------------ |
+| ``airflow (dags|tasks|scheduler) [-sd, --subdir]`` | ``airflow (dags|tasks|scheduler) [-S, --subdir]`` |
+| ``airflow tasks test [-dr, --dry_run]``            | ``airflow tasks test [-n, --dry-run]``            |
+| ``airflow dags backfill [-dr, --dry_run]``         | ``airflow dags backfill [-n, --dry-run]``         |
+| ``airflow tasks clear [-dx, --dag_regex]``         | ``airflow tasks clear [-R, --dag-regex]``         |
+| ``airflow kerberos [-kt, --keytab]``               | ``airflow kerberos [-k, --keytab]``               |
+| ``airflow tasks run [-int, --interactive]``        | ``airflow tasks run [-N, --interactive]``         |
+| ``airflow webserver [-hn, --hostname]``            | ``airflow webserver [-H, --hostname]``            |
+| ``airflow celery worker [-cn, --celery_hostname]`` | ``airflow celery worker [-H, --celery-hostname]`` |
+| ``airflow celery flower [-hn, --hostname]``        | ``airflow celery flower [-H, --hostname]``        |
+| ``airflow celery flower [-fc, --flower_conf]``     | ``airflow celery flower [-c, --flower-conf]``     |
+| ``airflow celery flower [-ba, --basic_auth]``      | ``airflow celery flower [-A, --basic-auth]``      |
+| ``airflow celery flower [-tp, --task_params]``     | ``airflow celery flower [-t, --task-params]``     |
+| ``airflow celery flower [-pm, --post_mortem]``     | ``airflow celery flower [-m, --post-mortem]``     |
+
+For Airflow long option, use [kebab-case](https://en.wikipedia.org/wiki/Letter_case) instead of [snake_case](https://en.wikipedia.org/wiki/Snake_case)
+
+| Old option                         | New option                         |
+| :--------------------------------- | :--------------------------------- |
+| ``--task_regex``                   | ``--task-regex``                   |
+| ``--start_date``                   | ``--start-date``                   |
+| ``--end_date``                     | ``--end-date``                     |
+| ``--dry_run``                      | ``--dry-run``                      |
+| ``--no_backfill``                  | ``--no-backfill``                  |
+| ``--mark_success``                 | ``--mark-success``                 |
+| ``--donot_pickle``                 | ``--donot-pickle``                 |
+| ``--ignore_dependencies``          | ``--ignore-dependencies``          |
+| ``--ignore_first_depends_on_past`` | ``--ignore-first-depends-on-past`` |
+| ``--delay_on_limit``               | ``--delay-on-limit``               |
+| ``--reset_dagruns``                | ``--reset-dagruns``                |
+| ``--rerun_failed_tasks``           | ``--rerun-failed-tasks``           |
+| ``--run_backwards``                | ``--run-backwards``                |
+| ``--only_failed``                  | ``--only-failed``                  |
+| ``--only_running``                 | ``--only-running``                 |
+| ``--exclude_subdags``              | ``--exclude-subdags``              |
+| ``--exclude_parentdag``            | ``--exclude-parentdag``            |
+| ``--dag_regex``                    | ``--dag-regex``                    |
+| ``--run_id``                       | ``--run-id``                       |
+| ``--exec_date``                    | ``--exec-date``                    |
+| ``--ignore_all_dependencies``      | ``--ignore-all-dependencies``      |
+| ``--ignore_depends_on_past``       | ``--ignore-depends-on-past``       |
+| ``--ship_dag``                     | ``--ship-dag``                     |
+| ``--job_id``                       | ``--job-id``                       |
+| ``--cfg_path``                     | ``--cfg-path``                     |
+| ``--ssl_cert``                     | ``--ssl-cert``                     |
+| ``--ssl_key``                      | ``--ssl-key``                      |
+| ``--worker_timeout``               | ``--worker-timeout``               |
+| ``--access_logfile``               | ``--access-logfile``               |
+| ``--error_logfile``                | ``--error-logfile``                |
+| ``--dag_id``                       | ``--dag-id``                       |
+| ``--num_runs``                     | ``--num-runs``                     |
+| ``--do_pickle``                    | ``--do-pickle``                    |
+| ``--celery_hostname``              | ``--celery-hostname``              |
+| ``--broker_api``                   | ``--broker-api``                   |
+| ``--flower_conf``                  | ``--flower-conf``                  |
+| ``--url_prefix``                   | ``--url-prefix``                   |
+| ``--basic_auth``                   | ``--basic-auth``                   |
+| ``--task_params``                  | ``--task-params``                  |
+| ``--post_mortem``                  | ``--post-mortem``                  |
+| ``--conn_uri``                     | ``--conn-uri``                     |
+| ``--conn_type``                    | ``--conn-type``                    |
+| ``--conn_host``                    | ``--conn-host``                    |
+| ``--conn_login``                   | ``--conn-login``                   |
+| ``--conn_password``                | ``--conn-password``                |
+| ``--conn_schema``                  | ``--conn-schema``                  |
+| ``--conn_port``                    | ``--conn-port``                    |
+| ``--conn_extra``                   | ``--conn-extra``                   |
+| ``--use_random_password``          | ``--use-random-password``          |
+| ``--skip_serve_logs``              | ``--skip-serve-logs``              |
 
 ### Remove serve_logs command from CLI
 
@@ -284,7 +572,7 @@ with redirect_stdout(StreamLogWriter(logger, logging.INFO)), \
 
 ### Removal of XCom.get_one()
 
-This one is supersede by `XCom.get_many().first()` which will return the same result.
+This one is superseded by `XCom.get_many().first()` which will return the same result.
 
 ### Changes to SQLSensor
 
@@ -733,12 +1021,12 @@ The following variables were removed from the task instance context:
 - latest_date
 - tables
 
-### Moved provide_gcp_credential_file decorator to GoogleCloudBaseHook
+### Moved provide_gcp_credential_file decorator to GoogleBaseHook
 
 To simplify the code, the decorator has been moved from the inner-class.
 
-Instead of `@GoogleCloudBaseHook._Decorators.provide_gcp_credential_file`,
-you should write `@GoogleCloudBaseHook.provide_gcp_credential_file`
+Instead of `@GoogleBaseHook._Decorators.provide_gcp_credential_file`,
+you should write `@GoogleBaseHook.provide_gcp_credential_file`
 
 ### Changes to S3Hook
 
@@ -925,6 +1213,87 @@ No change is needed if only the default trigger rule `all_success` is being used
 If the DAG relies on tasks with other trigger rules (i.e. `all_done`) being skipped by the `LatestOnlyOperator`, adjustments to the DAG need to be made to commodate the change in behaviour, i.e. with additional edges from the `LatestOnlyOperator`.
 
 The goal of this change is to achieve a more consistent and configurale cascading behaviour based on the `BaseBranchOperator` (see [AIRFLOW-2923](https://jira.apache.org/jira/browse/AIRFLOW-2923) and [AIRFLOW-1784](https://jira.apache.org/jira/browse/AIRFLOW-1784)).
+
+### Change default snowflake_conn_id for Snowflake hook and operators
+
+When initializing a Snowflake hook or operator, the value used for `snowflake_conn_id` was always `snowflake_conn_id`, regardless of whether or not you specified a value for it. The default `snowflake_conn_id` value is now switched to `snowflake_default` for consistency and will be properly overriden when specified.
+
+### Simplify the response payload of endpoints /dag_stats and /task_stats
+
+The response of endpoints `/dag_stats` and `/task_stats` help UI fetch brief statistics about DAGs and Tasks. The format was like
+
+```json
+{
+    "example_http_operator": [
+        {
+            "state": "success",
+            "count": 0,
+            "dag_id": "example_http_operator",
+            "color": "green"
+        },
+        {
+            "state": "running",
+            "count": 0,
+            "dag_id": "example_http_operator",
+            "color": "lime"
+        },
+        ...
+],
+...
+}
+```
+
+The `dag_id` was repeated in the payload, which makes the response payload unnecessarily bigger.
+
+Now the `dag_id` will not appear repeated in the payload, and the response format is like
+
+```json
+{
+    "example_http_operator": [
+        {
+            "state": "success",
+            "count": 0,
+            "color": "green"
+        },
+        {
+            "state": "running",
+            "count": 0,
+            "color": "lime"
+        },
+        ...
+],
+...
+}
+```
+
+## Airflow 1.10.10
+
+### Setting Empty string to a Airflow Variable will return an empty string
+
+Previously when you set an Airflow Variable with an empty string (`''`), the value you used to get
+back was ``None``. This will now return an empty string (`'''`)
+
+Example:
+
+```python
+>> Variable.set('test_key', '')
+>> Variable.get('test_key')
+```
+
+The above code returned `None` previously, now it will return `''`.
+
+### Make behavior of `none_failed` trigger rule consistent with documentation
+The behavior of the `none_failed` trigger rule is documented as "all parents have not failed (`failed` or
+    `upstream_failed`) i.e. all parents have succeeded or been skipped." As previously implemented, the actual behavior
+    would skip if all parents of a task had also skipped.
+
+### Add new trigger rule `none_failed_or_skipped`
+The fix to `none_failed` trigger rule breaks workflows that depend on the previous behavior.
+    If you need the old behavior, you should change the tasks with `none_failed` trigger rule to `none_failed_or_skipped`.
+
+### Success Callback will be called when a task in marked as success from UI
+
+When a task is marked as success by a user from Airflow UI - `on_success_callback` will be called
 
 ## Airflow 1.10.9
 
@@ -1699,7 +2068,7 @@ Type "help", "copyright", "credits" or "license" for more information.
 >>> from airflow.settings import *
 >>>
 >>> from datetime import datetime
->>> from airflow import DAG
+>>> from airflow.models.dag import DAG
 >>> from airflow.operators.dummy_operator import DummyOperator
 >>>
 >>> dag = DAG('simple_dag', start_date=datetime(2017, 9, 1))

@@ -80,6 +80,10 @@ All operators are in the following packages:
 
   airflow/providers/apache/hive/sensors/index
 
+  airflow/providers/apache/livy/operators/index
+
+  airflow/providers/apache/livy/sensors/index
+
   airflow/providers/apache/pig/operators/index
 
   airflow/providers/apache/spark/operators/index
@@ -89,6 +93,8 @@ All operators are in the following packages:
   airflow/providers/celery/sensors/index
 
   airflow/providers/cncf/kubernetes/operators/index
+
+  airflow/providers/cncf/kubernetes/sensors/index
 
   airflow/providers/databricks/operators/index
 
@@ -102,11 +108,17 @@ All operators are in the following packages:
 
   airflow/providers/email/operators/index
 
+  airflow/providers/exasol/operators/index
+
   airflow/providers/ftp/sensors/index
+
+  airflow/providers/google/ads/operators/index
 
   airflow/providers/google/cloud/operators/index
 
   airflow/providers/google/cloud/sensors/index
+
+  airflow/providers/google/firebase/operators/index
 
   airflow/providers/google/marketing_platform/operators/index
 
@@ -150,8 +162,6 @@ All operators are in the following packages:
 
   airflow/providers/postgres/operators/index
 
-  airflow/providers/presto/operators/index
-
   airflow/providers/qubole/operators/index
 
   airflow/providers/qubole/sensors/index
@@ -160,11 +170,17 @@ All operators are in the following packages:
 
   airflow/providers/redis/sensors/index
 
+  airflow/providers/salesforce/operators/index
+
+  airflow/providers/salesforce/sensors/index
+
   airflow/providers/segment/operators/index
 
   airflow/providers/sftp/operators/index
 
   airflow/providers/sftp/sensors/index
+
+  airflow/providers/singularity/operators/index
 
   airflow/providers/slack/operators/index
 
@@ -207,6 +223,8 @@ All hooks are in the following packages:
 
   airflow/providers/apache/hive/hooks/index
 
+  airflow/providers/apache/livy/hooks/index
+
   airflow/providers/apache/pig/hooks/index
 
   airflow/providers/apache/pinot/hooks/index
@@ -216,6 +234,8 @@ All hooks are in the following packages:
   airflow/providers/apache/sqoop/hooks/index
 
   airflow/providers/cloudant/hooks/index
+
+  airflow/providers/cncf/kubernetes/hooks/index
 
   airflow/providers/databricks/hooks/index
 
@@ -229,9 +249,19 @@ All hooks are in the following packages:
 
   airflow/providers/elasticsearch/hooks/index
 
+  airflow/providers/exasol/hooks/index
+
+  airflow/providers/facebook/ads/hooks/index
+
   airflow/providers/ftp/hooks/index
 
+  airflow/providers/google/ads/hooks/index
+
   airflow/providers/google/cloud/hooks/index
+
+  airflow/providers/google/common/hooks/index
+
+  airflow/providers/google/firebase/hooks/index
 
   airflow/providers/google/marketing_platform/hooks/index
 
@@ -261,7 +291,7 @@ All hooks are in the following packages:
 
   airflow/providers/odbc/hooks/index
 
-  airflow/providers/openfass/hooks/index
+  airflow/providers/openfaas/hooks/index
 
   airflow/providers/opsgenie/hooks/index
 
@@ -326,3 +356,20 @@ persisted in the database.
   :maxdepth: 1
 
   airflow/models/index
+
+
+Secrets Backends
+----------------
+Airflow uses relies on secrets backends to retrieve :class:`~airflow.models.connection.Connection` objects.
+All secrets backends derive from :class:`~airflow.secrets.BaseSecretsBackend`.
+
+.. toctree::
+  :includehidden:
+  :glob:
+  :maxdepth: 1
+
+  airflow/secrets/index
+
+  airflow/providers/amazon/aws/secrets/index
+  airflow/providers/hashicorp/secrets/index
+  airflow/providers/google/cloud/secrets/index

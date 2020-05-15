@@ -19,7 +19,7 @@
 import unittest
 from unittest import mock
 
-from airflow import AirflowException
+from airflow.exceptions import AirflowException
 from airflow.providers.segment.hooks.segment import SegmentHook
 
 TEST_CONN_ID = 'test_segment'
@@ -55,7 +55,3 @@ class TestSegmentHook(unittest.TestCase):
     def test_on_error(self):
         with self.assertRaises(AirflowException):
             self.test_hook.on_error('error', ['items'])
-
-
-if __name__ == '__main__':
-    unittest.main()

@@ -21,8 +21,8 @@ import unittest
 
 import pytest
 
-from airflow import DAG
 from airflow.models import Connection
+from airflow.models.dag import DAG
 from airflow.providers.mongo.hooks.mongo import MongoHook
 from airflow.providers.mongo.sensors.mongo import MongoSensor
 from airflow.utils import db, timezone
@@ -58,7 +58,3 @@ class TestMongoSensor(unittest.TestCase):
 
     def test_poke(self):
         self.assertTrue(self.sensor.poke(None))
-
-
-if __name__ == '__main__':
-    unittest.main()

@@ -19,10 +19,11 @@
 # Details: https://github.com/kaxil/boring-cyborg
 
 labelPRBasedOnFilePath:
-  provider:GCP:
-    - airflow/providers/google/cloud/**/*
-    - tests/providers/google/cloud/**/*
-    - tests/providers/google/cloud/*
+  provider:Google:
+    - airflow/providers/google/*
+    - airflow/providers/google/**/*
+    - tests/providers/google/*
+    - tests/providers/google/**/*
     - docs/howto/connection/gcp.rst
     - docs/howto/connection/gcp_sql.rst
     - docs/howto/operator/gcp/*
@@ -58,7 +59,7 @@ labelPRBasedOnFilePath:
     - .github/**/*
     - .github/*
     - breeze
-    - Dockerfile
+    - Dockerfile.ci
     - BREEZE.rst
     - breeze-complete
     - confirm
@@ -111,18 +112,33 @@ labelPRBasedOnFilePath:
     - docs/plugins.rst
 
   area:Scheduler/Executor:
-    - airflow/jobs/*
     - airflow/executors/*
+    - airflow/jobs/*
     - airflow/task/task_runner/*
+    - airflow/utils/dag_processing.py
+    - docs/executor/*
+    - docs/scheduler.rst
     - tests/executors/*
     - tests/jobs/*
-    - docs/scheduler.rst
-    - docs/executor/*
+
+  area:Secrets:
+    - airflow/secrets/*
+    - airflow/providers/**/secrets/*
+    - tests/secrets/*
+    - tests/providers/**/secrets/*
 
   area:Serialization:
     - airflow/serialization/*
     - tests/serialization/*
     - docs/dag-serialization.rst
+
+# Various Flags to control behaviour of the "Labeler"
+labelerFlags:
+  # If this flag is changed to 'false', labels would only be added when the PR is first created
+  # and not when existing PR is updated.
+  # The default is 'true' which means the labels would be added when PR is updated even if they
+  # were removed by the user
+  labelOnPRUpdates: false
 
 # Comment to be posted to welcome users when they open their first PR
 firstPRWelcomeComment: >
@@ -147,6 +163,9 @@ firstPRWelcomeComment: >
   - Be patient and persistent. It might take some time to get a review or get the final approval from
   Committers.
 
+  - Be sure to read the [Airflow Coding style](
+  https://github.com/apache/airflow/blob/master/CONTRIBUTING.rst#coding-style-and-best-practices).
+
   Apache Airflow is a community-driven project and together we are making it better 🚀.
 
   In case of doubts contact the developers at:
@@ -159,6 +178,10 @@ firstPRWelcomeComment: >
 firstPRMergeComment: >
   Awesome work, congrats on your first merged pull request!
 
+# Comment to be posted to on first time issues
+firstIssueWelcomeComment: >
+  Thanks for opening your first issue here! Be sure to follow the issue template!
+
 insertIssueLinkInPrDescription:
   descriptionIssuePlaceholderRegexp: "^Issue link: (.*)$"
   matchers:
@@ -168,10 +191,6 @@ insertIssueLinkInPrDescription:
     docOnlyIssueMatch:
       titleIssueIdRegexp: \[(AIRFLOW-X{4})\]
       descriptionIssueLink: "`Document only change, no JIRA issue`"
-
-verifyTitles:
-  titleRegexp: ^\[AIRFLOW-[0-9]{4}\].*$|^\[AIRFLOW-XXXX\].*$
-  validateEitherPrOrSingleCommitTitle: true
 
 checkUpToDate:
   - airflow/migrations/*

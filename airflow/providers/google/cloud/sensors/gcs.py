@@ -23,7 +23,7 @@ import os
 from datetime import datetime
 from typing import Callable, List, Optional
 
-from airflow import AirflowException
+from airflow.exceptions import AirflowException
 from airflow.providers.google.cloud.hooks.gcs import GCSHook
 from airflow.sensors.base_sensor_operator import BaseSensorOperator
 from airflow.utils.decorators import apply_defaults
@@ -308,7 +308,7 @@ class GCSUploadSessionCompleteSensor(BaseSensorOperator):
                     """, current_num_objects, path, self.inactivity_period)
                 return True
 
-            self.log.warning("FAILURE: Inactivity Period passed, not enough objects found in %s", path)
+            self.log.error("FAILURE: Inactivity Period passed, not enough objects found in %s", path)
 
             return False
         return False

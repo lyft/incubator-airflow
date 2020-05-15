@@ -209,6 +209,9 @@ class QuboleValueCheckOperator(ValueCheckOperator, QuboleOperator):
 
 
 def get_sql_from_qbol_cmd(params):
+    """
+    Get Qubole sql from Qubole command
+    """
     sql = ''
     if 'query' in params:
         sql = params['query']
@@ -218,15 +221,19 @@ def get_sql_from_qbol_cmd(params):
 
 
 def handle_airflow_exception(airflow_exception, hook):
+    """
+    Qubole check handle Airflow exception
+    """
     cmd = hook.cmd
     if cmd is not None:
         if cmd.is_success(cmd.status):
             qubole_command_results = hook.get_query_results()
             qubole_command_id = cmd.id
-            exception_message = '\nQubole Command Id: {qubole_command_id}' \
-                                '\nQubole Command Results:' \
-                                '\n{qubole_command_results}'.format(
-                qubole_command_id=qubole_command_id,  # noqa: E122
-                qubole_command_results=qubole_command_results)
+            exception_message = \
+                '\nQubole Command Id: {qubole_command_id}' \
+                '\nQubole Command Results:' \
+                '\n{qubole_command_results}'.format(
+                    qubole_command_id=qubole_command_id,
+                    qubole_command_results=qubole_command_results)
             raise AirflowException(str(airflow_exception) + exception_message)
     raise AirflowException(str(airflow_exception))

@@ -21,7 +21,7 @@ from base64 import b64encode
 
 from parameterized import parameterized
 
-from airflow import AirflowException
+from airflow.exceptions import AirflowException
 from airflow.models import DAG, TaskInstance
 from airflow.providers.ssh.operators.ssh import SSHOperator
 from airflow.utils import timezone
@@ -215,7 +215,3 @@ class TestSSHOperator(unittest.TestCase):
         except Exception:  # pylint: disable=broad-except
             pass
         self.assertEqual(task.get_pty, get_pty_out)
-
-
-if __name__ == '__main__':
-    unittest.main()

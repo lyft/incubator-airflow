@@ -21,7 +21,7 @@ import unittest
 
 import requests_mock
 
-from airflow import AirflowException
+from airflow.exceptions import AirflowException
 from airflow.models import Connection
 from airflow.providers.opsgenie.hooks.opsgenie_alert import OpsgenieAlertHook
 from airflow.utils import db
@@ -129,7 +129,3 @@ class TestOpsgenieAlertHook(unittest.TestCase):
         )
         resp = hook.execute(payload=self._payload)
         self.assertEqual(json.loads(resp.request.body), self._payload)
-
-
-if __name__ == '__main__':
-    unittest.main()

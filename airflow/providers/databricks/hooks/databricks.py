@@ -97,6 +97,7 @@ class DatabricksHook(BaseHook):
     """
     def __init__(self, databricks_conn_id='databricks_default', timeout_seconds=180, retry_limit=3,
                  retry_delay=1.0):
+        super().__init__()
         self.databricks_conn_id = databricks_conn_id
         self.databricks_conn = self.get_connection(databricks_conn_id)
         self.timeout_seconds = timeout_seconds
@@ -164,6 +165,8 @@ class DatabricksHook(BaseHook):
             request_func = requests.get
         elif method == 'POST':
             request_func = requests.post
+        elif method == 'PATCH':
+            request_func = requests.patch
         else:
             raise AirflowException('Unexpected HTTP Method: ' + method)
 
@@ -234,6 +237,18 @@ class DatabricksHook(BaseHook):
         json = {'run_id': run_id}
         response = self._do_api_call(GET_RUN_ENDPOINT, json)
         return response['run_page_url']
+
+    def get_job_id(self, run_id: str) -> str:
+        """
+        Retrieves job_id from run_id.
+
+        :param run_id: id of the run
+        :type run_id: str
+        :return: Job id for given Databricks run
+        """
+        json = {'run_id': run_id}
+        response = self._do_api_call(GET_RUN_ENDPOINT, json)
+        return response['job_id']
 
     def get_run_state(self, run_id: str) -> RunState:
         """

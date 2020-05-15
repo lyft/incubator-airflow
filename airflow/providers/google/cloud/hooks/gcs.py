@@ -19,24 +19,91 @@
 """
 This module contains a Google Cloud Storage hook.
 """
+import functools
 import gzip as gz
 import os
 import shutil
 import warnings
+from contextlib import contextmanager
 from io import BytesIO
 from os import path
-from typing import Optional, Set, Tuple, Union
+from tempfile import NamedTemporaryFile
+from typing import Optional, Set, Tuple, TypeVar, Union
 from urllib.parse import urlparse
 
 from google.api_core.exceptions import NotFound
 from google.cloud import storage
 
 from airflow.exceptions import AirflowException
-from airflow.providers.google.cloud.hooks.base import CloudBaseHook
+from airflow.providers.google.common.hooks.base_google import GoogleBaseHook
 from airflow.version import version
 
+RT = TypeVar('RT')  # pylint: disable=invalid-name
 
-class GCSHook(CloudBaseHook):
+
+def _fallback_object_url_to_object_name_and_bucket_name(
+    object_url_keyword_arg_name='object_url',
+    bucket_name_keyword_arg_name='bucket_name',
+    object_name_keyword_arg_name='object_name',
+):
+    """
+    Decorator factory that convert object URL parameter to object name and bucket name parameter.
+
+    :param object_url_keyword_arg_name: Name of the object URL parameter
+    :type object_url_keyword_arg_name: str
+    :param bucket_name_keyword_arg_name: Name of the bucket name parameter
+    :type bucket_name_keyword_arg_name: str
+    :param object_name_keyword_arg_name: Name of the object name parameter
+    :type object_name_keyword_arg_name: str
+    :return: Decorator
+    """
+    def _wrapper(func):
+
+        @functools.wraps(func)
+        def _inner_wrapper(self: "GCSHook", * args, **kwargs) -> RT:
+            if args:
+                raise AirflowException(
+                    "You must use keyword arguments in this methods rather than positional")
+
+            object_url = kwargs.get(object_url_keyword_arg_name)
+            bucket_name = kwargs.get(bucket_name_keyword_arg_name)
+            object_name = kwargs.get(object_name_keyword_arg_name)
+
+            if object_url and bucket_name and object_name:
+                raise AirflowException(
+                    "The mutually exclusive parameters. `object_url`, `bucket_name` together "
+                    "with `object_name` parameters are present. "
+                    "Please provide `object_url` or `bucket_name` and `object_name`."
+                )
+            if object_url:
+                bucket_name, object_name = _parse_gcs_url(object_url)
+                kwargs[bucket_name_keyword_arg_name] = bucket_name
+                kwargs[object_name_keyword_arg_name] = object_name
+                del kwargs[object_url_keyword_arg_name]
+
+            if not object_name or not bucket_name:
+                raise TypeError(
+                    f"{func.__name__}() missing 2 required positional arguments: "
+                    f"'{bucket_name_keyword_arg_name}' and '{object_name_keyword_arg_name}' "
+                    f"or {object_url_keyword_arg_name}"
+                )
+            if not object_name:
+                raise TypeError(
+                    f"{func.__name__}() missing 1 required positional argument: "
+                    f"'{object_name_keyword_arg_name}'"
+                )
+            if not bucket_name:
+                raise TypeError(
+                    f"{func.__name__}() missing 1 required positional argument: "
+                    f"'{bucket_name_keyword_arg_name}'"
+                )
+
+            return func(self, *args, **kwargs)
+        return _inner_wrapper
+    return _wrapper
+
+
+class GCSHook(GoogleBaseHook):
     """
     Interact with Google Cloud Storage. This hook uses the Google Cloud Platform
     connection.
@@ -185,6 +252,10 @@ class GCSHook(CloudBaseHook):
         :param filename: If set, a local file path where the file should be written to.
         :type filename: str
         """
+
+        # TODO: future improvement check file size before downloading,
+        #  to check for local space availability
+
         client = self.get_conn()
         bucket = client.bucket(bucket_name)
         blob = bucket.blob(blob_name=object_name)
@@ -195,6 +266,36 @@ class GCSHook(CloudBaseHook):
             return filename
         else:
             return blob.download_as_string()
+
+    @_fallback_object_url_to_object_name_and_bucket_name()
+    @contextmanager
+    def provide_file(
+        self,
+        bucket_name: Optional[str] = None,
+        object_name: Optional[str] = None,
+        object_url: Optional[str] = None
+    ):
+        """
+        Downloads the file to a temporary directory and returns a file handle
+
+        You can use this method by passing the bucket_name and object_name parameters
+        or just object_url parameter.
+
+        :param bucket_name: The bucket to fetch from.
+        :type bucket_name: str
+        :param object_name: The object to fetch.
+        :type object_name: str
+        :param object_url: File reference url. Must start with "gs: //"
+        :type object_url: str
+        :return: File handler
+        """
+        if object_name is None:
+            raise ValueError("Object name can not be empty")
+        _, _, file_name = object_name.rpartition("/")
+        with NamedTemporaryFile(suffix=file_name) as tmp_file:
+            self.download(bucket_name=bucket_name, object_name=object_name, filename=tmp_file.name)
+            tmp_file.flush()
+            yield tmp_file
 
     def upload(self, bucket_name: str, object_name: str, filename: Optional[str] = None,
                data: Optional[Union[str, bytes]] = None, mime_type: Optional[str] = None, gzip: bool = False,
@@ -272,6 +373,24 @@ class GCSHook(CloudBaseHook):
         blob = bucket.blob(blob_name=object_name)
         return blob.exists()
 
+    def get_blob_update_time(self, bucket_name, object_name):
+        """
+        Get the update time of a file in Google Cloud Storage
+
+        :param bucket_name: The Google Cloud Storage bucket where the object is.
+        :type bucket_name: str
+        :param object_name: The name of the blob to get updated time from the Google cloud
+            storage bucket.
+        :type object_name: str
+        """
+        client = self.get_conn()
+        bucket = client.bucket(bucket_name)
+        blob = bucket.get_blob(blob_name=object_name)
+        if blob is None:
+            raise ValueError("Object ({}) not found in Bucket ({})".format(
+                object_name, bucket_name))
+        return blob.updated
+
     def is_updated_after(self, bucket_name, object_name, ts):
         """
         Checks if an blob_name is updated in Google Cloud Storage.
@@ -284,27 +403,85 @@ class GCSHook(CloudBaseHook):
         :param ts: The timestamp to check against.
         :type ts: datetime.datetime
         """
-        client = self.get_conn()
-        bucket = client.bucket(bucket_name)
-        blob = bucket.get_blob(blob_name=object_name)
-
-        if blob is None:
-            raise ValueError("Object ({}) not found in Bucket ({})".format(
-                object_name, bucket_name))
-
-        blob_update_time = blob.updated
-
+        blob_update_time = self.get_blob_update_time(bucket_name, object_name)
         if blob_update_time is not None:
             import dateutil.tz
-
             if not ts.tzinfo:
                 ts = ts.replace(tzinfo=dateutil.tz.tzutc())
-
             self.log.info("Verify object date: %s > %s", blob_update_time, ts)
-
             if blob_update_time > ts:
                 return True
+        return False
 
+    def is_updated_between(self, bucket_name, object_name, min_ts, max_ts):
+        """
+        Checks if an blob_name is updated in Google Cloud Storage.
+
+        :param bucket_name: The Google Cloud Storage bucket where the object is.
+        :type bucket_name: str
+        :param object_name: The name of the object to check in the Google cloud
+                storage bucket.
+        :type object_name: str
+        :param min_ts: The minimum timestamp to check against.
+        :type min_ts: datetime.datetime
+        :param max_ts: The maximum timestamp to check against.
+        :type max_ts: datetime.datetime
+        """
+        blob_update_time = self.get_blob_update_time(bucket_name, object_name)
+        if blob_update_time is not None:
+            import dateutil.tz
+            if not min_ts.tzinfo:
+                min_ts = min_ts.replace(tzinfo=dateutil.tz.tzutc())
+            if not max_ts.tzinfo:
+                max_ts = max_ts.replace(tzinfo=dateutil.tz.tzutc())
+            self.log.info("Verify object date: %s is between %s and %s", blob_update_time, min_ts, max_ts)
+            if min_ts <= blob_update_time < max_ts:
+                return True
+        return False
+
+    def is_updated_before(self, bucket_name, object_name, ts):
+        """
+        Checks if an blob_name is updated before given time in Google Cloud Storage.
+
+        :param bucket_name: The Google Cloud Storage bucket where the object is.
+        :type bucket_name: str
+        :param object_name: The name of the object to check in the Google cloud
+            storage bucket.
+        :type object_name: str
+        :param ts: The timestamp to check against.
+        :type ts: datetime.datetime
+        """
+        blob_update_time = self.get_blob_update_time(bucket_name, object_name)
+        if blob_update_time is not None:
+            import dateutil.tz
+            if not ts.tzinfo:
+                ts = ts.replace(tzinfo=dateutil.tz.tzutc())
+            self.log.info("Verify object date: %s < %s", blob_update_time, ts)
+            if blob_update_time < ts:
+                return True
+        return False
+
+    def is_older_than(self, bucket_name, object_name, seconds):
+        """
+        Check if object is older than given time
+
+        :param bucket_name: The Google Cloud Storage bucket where the object is.
+        :type bucket_name: str
+        :param object_name: The name of the object to check in the Google cloud
+            storage bucket.
+        :type object_name: str
+        :param seconds: The time in seconds to check against
+        :type seconds: int
+        """
+        blob_update_time = self.get_blob_update_time(bucket_name, object_name)
+        if blob_update_time is not None:
+            from airflow.utils import timezone
+            from datetime import timedelta
+            current_time = timezone.utcnow()
+            given_time = current_time - timedelta(seconds=seconds)
+            self.log.info("Verify object date: %s is older than %s", blob_update_time, given_time)
+            if blob_update_time < given_time:
+                return True
         return False
 
     def delete(self, bucket_name, object_name):
@@ -450,8 +627,7 @@ class GCSHook(CloudBaseHook):
         self.log.info('The md5Hash of %s is %s', object_name, blob_md5hash)
         return blob_md5hash
 
-    @CloudBaseHook.catch_http_exception
-    @CloudBaseHook.fallback_to_default_project_id
+    @GoogleBaseHook.fallback_to_default_project_id
     def create_bucket(self,
                       bucket_name,
                       resource=None,
@@ -798,7 +974,7 @@ class GCSHook(CloudBaseHook):
         return to_copy_blobs, to_delete_blobs, to_rewrite_blobs
 
 
-def _parse_gcs_url(gsurl):
+def _parse_gcs_url(gsurl: str) -> Tuple[str, str]:
     """
     Given a Google Cloud Storage URL (gs://<bucket>/<blob>), returns a
     tuple containing the corresponding bucket and blob.
@@ -807,8 +983,10 @@ def _parse_gcs_url(gsurl):
     parsed_url = urlparse(gsurl)
     if not parsed_url.netloc:
         raise AirflowException('Please provide a bucket name')
-    else:
-        bucket = parsed_url.netloc
-        # Remove leading '/' but NOT trailing one
-        blob = parsed_url.path.lstrip('/')
-        return bucket, blob
+    if parsed_url.scheme.lower() != "gs":
+        raise AirflowException(f"Schema must be to 'gs://': Current schema: '{parsed_url.scheme}://'")
+
+    bucket = parsed_url.netloc
+    # Remove leading '/' but NOT trailing one
+    blob = parsed_url.path.lstrip('/')
+    return bucket, blob

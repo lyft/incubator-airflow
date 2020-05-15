@@ -18,7 +18,7 @@
 #
 import unittest
 
-from airflow import DAG
+from airflow.models.dag import DAG
 from airflow.providers.discord.operators.discord_webhook import DiscordWebhookOperator
 from airflow.utils import timezone
 
@@ -57,7 +57,3 @@ class TestDiscordWebhookOperator(unittest.TestCase):
         self.assertEqual(self._config['avatar_url'], operator.avatar_url)
         self.assertEqual(self._config['tts'], operator.tts)
         self.assertEqual(self._config['proxy'], operator.proxy)
-
-
-if __name__ == '__main__':
-    unittest.main()

@@ -25,7 +25,7 @@ from airflow import models
 from airflow.operators.bash import BashOperator
 from airflow.providers.google.cloud.operators.gcs import (
     GCSBucketCreateAclEntryOperator, GCSCreateBucketOperator, GCSDeleteBucketOperator,
-    GCSDeleteObjectsOperator, GcsFileTransformOperator, GCSListObjectsOperator,
+    GCSDeleteObjectsOperator, GCSFileTransformOperator, GCSListObjectsOperator,
     GCSObjectCreateAclEntryOperator, GCSToLocalOperator,
 )
 from airflow.providers.google.cloud.operators.gcs_to_gcs import GCSToGCSOperator
@@ -34,13 +34,11 @@ from airflow.utils.dates import days_ago
 
 default_args = {"start_date": days_ago(1)}
 
-# [START howto_operator_gcs_acl_args_common]
 PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "example-id")
 BUCKET_1 = os.environ.get("GCP_GCS_BUCKET_1", "test-gcs-example-bucket")
 GCS_ACL_ENTITY = os.environ.get("GCS_ACL_ENTITY", "allUsers")
 GCS_ACL_BUCKET_ROLE = "OWNER"
 GCS_ACL_OBJECT_ROLE = "OWNER"
-# [END howto_operator_gcs_acl_args_common]
 
 BUCKET_2 = os.environ.get("GCP_GCS_BUCKET_1", "test-gcs-example-bucket-2")
 
@@ -83,7 +81,7 @@ with models.DAG(
         bucket=BUCKET_1,
     )
 
-    transform_file = GcsFileTransformOperator(
+    transform_file = GCSFileTransformOperator(
         task_id="transform_file",
         source_bucket=BUCKET_1,
         source_object=BUCKET_FILE_LOCATION,
@@ -128,8 +126,8 @@ with models.DAG(
     )
 
     # [START howto_operator_gcs_delete_bucket]
-    delete_bucket_1 = GCSDeleteBucketOperator(task_id="delete_bucket", bucket_name=BUCKET_1)
-    delete_bucket_2 = GCSDeleteBucketOperator(task_id="delete_bucket", bucket_name=BUCKET_2)
+    delete_bucket_1 = GCSDeleteBucketOperator(task_id="delete_bucket_1", bucket_name=BUCKET_1)
+    delete_bucket_2 = GCSDeleteBucketOperator(task_id="delete_bucket_2", bucket_name=BUCKET_2)
     # [END howto_operator_gcs_delete_bucket]
 
     [create_bucket1, create_bucket2] >> list_buckets >> list_buckets_result
@@ -144,7 +142,7 @@ with models.DAG(
     list_buckets >> delete_bucket_1
     upload_file >> delete_bucket_1
     create_bucket1 >> upload_file >> delete_bucket_1
-    transform_file >> delete_bucket_1
+    upload_file >> transform_file >> delete_bucket_1
     gcs_bucket_create_acl_entry_task >> delete_bucket_1
     gcs_object_create_acl_entry_task >> delete_bucket_1
     download_file >> delete_bucket_1

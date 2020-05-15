@@ -34,8 +34,8 @@ from google.cloud.dlp_v2.types import (
     RiskAnalysisJobConfig, StoredInfoType, StoredInfoTypeConfig,
 )
 
-from airflow import AirflowException
-from airflow.providers.google.cloud.hooks.base import CloudBaseHook
+from airflow.exceptions import AirflowException
+from airflow.providers.google.common.hooks.base_google import GoogleBaseHook
 
 DLP_JOB_PATH_PATTERN = "^projects/[^/]+/dlpJobs/(?P<job>.*?)$"
 # Time to sleep between active checks of the operation results
@@ -43,7 +43,7 @@ TIME_TO_SLEEP_IN_SECONDS = 1
 
 
 # pylint: disable=R0904, C0302
-class CloudDLPHook(CloudBaseHook):
+class CloudDLPHook(GoogleBaseHook):
     """
     Hook for Google Cloud Data Loss Prevention (DLP) APIs.
     Cloud DLP allows clients to detect the presence of Personally Identifiable
@@ -75,12 +75,11 @@ class CloudDLPHook(CloudBaseHook):
             self._client = DlpServiceClient(credentials=self._get_credentials(), client_info=self.client_info)
         return self._client
 
-    @CloudBaseHook.catch_http_exception
-    @CloudBaseHook.fallback_to_default_project_id
+    @GoogleBaseHook.fallback_to_default_project_id
     def cancel_dlp_job(
         self,
         dlp_job_id: str,
-        project_id: Optional[str] = None,
+        project_id: str,
         retry: Optional[Retry] = None,
         timeout: Optional[float] = None,
         metadata: Optional[Sequence[Tuple[str, str]]] = None,
@@ -113,7 +112,6 @@ class CloudDLPHook(CloudBaseHook):
         name = DlpServiceClient.dlp_job_path(project_id, dlp_job_id)
         client.cancel_dlp_job(name=name, retry=retry, timeout=timeout, metadata=metadata)
 
-    @CloudBaseHook.catch_http_exception
     def create_deidentify_template(
         self,
         organization_id: Optional[str] = None,
@@ -171,11 +169,10 @@ class CloudDLPHook(CloudBaseHook):
             metadata=metadata,
         )
 
-    @CloudBaseHook.catch_http_exception
-    @CloudBaseHook.fallback_to_default_project_id
+    @GoogleBaseHook.fallback_to_default_project_id
     def create_dlp_job(
         self,
-        project_id: Optional[str] = None,
+        project_id: str,
         inspect_job: Optional[Union[dict, InspectJobConfig]] = None,
         risk_job: Optional[Union[dict, RiskAnalysisJobConfig]] = None,
         job_id: Optional[str] = None,
@@ -254,7 +251,6 @@ class CloudDLPHook(CloudBaseHook):
                 )
         return job
 
-    @CloudBaseHook.catch_http_exception
     def create_inspect_template(
         self,
         organization_id: Optional[str] = None,
@@ -313,11 +309,10 @@ class CloudDLPHook(CloudBaseHook):
             metadata=metadata,
         )
 
-    @CloudBaseHook.catch_http_exception
-    @CloudBaseHook.fallback_to_default_project_id
+    @GoogleBaseHook.fallback_to_default_project_id
     def create_job_trigger(
         self,
-        project_id: Optional[str] = None,
+        project_id: str,
         job_trigger: Optional[Union[dict, JobTrigger]] = None,
         trigger_id: Optional[str] = None,
         retry: Optional[Retry] = None,
@@ -360,7 +355,6 @@ class CloudDLPHook(CloudBaseHook):
             metadata=metadata,
         )
 
-    @CloudBaseHook.catch_http_exception
     def create_stored_info_type(
         self,
         organization_id: Optional[str] = None,
@@ -418,11 +412,10 @@ class CloudDLPHook(CloudBaseHook):
             metadata=metadata,
         )
 
-    @CloudBaseHook.catch_http_exception
-    @CloudBaseHook.fallback_to_default_project_id
+    @GoogleBaseHook.fallback_to_default_project_id
     def deidentify_content(
         self,
-        project_id: Optional[str] = None,
+        project_id: str,
         deidentify_config: Optional[Union[dict, DeidentifyConfig]] = None,
         inspect_config: Optional[Union[dict, InspectConfig]] = None,
         item: Optional[Union[dict, ContentItem]] = None,
@@ -483,7 +476,6 @@ class CloudDLPHook(CloudBaseHook):
             metadata=metadata,
         )
 
-    @CloudBaseHook.catch_http_exception
     def delete_deidentify_template(
         self, template_id, organization_id=None, project_id=None, retry=None, timeout=None, metadata=None
     ) -> None:
@@ -527,12 +519,11 @@ class CloudDLPHook(CloudBaseHook):
 
         client.delete_deidentify_template(name=name, retry=retry, timeout=timeout, metadata=metadata)
 
-    @CloudBaseHook.catch_http_exception
-    @CloudBaseHook.fallback_to_default_project_id
+    @GoogleBaseHook.fallback_to_default_project_id
     def delete_dlp_job(
         self,
         dlp_job_id: str,
-        project_id: Optional[str] = None,
+        project_id: str,
         retry: Optional[Retry] = None,
         timeout: Optional[float] = None,
         metadata: Optional[Sequence[Tuple[str, str]]] = None,
@@ -566,7 +557,6 @@ class CloudDLPHook(CloudBaseHook):
         name = DlpServiceClient.dlp_job_path(project_id, dlp_job_id)
         client.delete_dlp_job(name=name, retry=retry, timeout=timeout, metadata=metadata)
 
-    @CloudBaseHook.catch_http_exception
     def delete_inspect_template(
         self,
         template_id: str,
@@ -616,12 +606,11 @@ class CloudDLPHook(CloudBaseHook):
 
         client.delete_inspect_template(name=name, retry=retry, timeout=timeout, metadata=metadata)
 
-    @CloudBaseHook.catch_http_exception
-    @CloudBaseHook.fallback_to_default_project_id
+    @GoogleBaseHook.fallback_to_default_project_id
     def delete_job_trigger(
         self,
         job_trigger_id: str,
-        project_id: Optional[str] = None,
+        project_id: str,
         retry: Optional[Retry] = None,
         timeout: Optional[float] = None,
         metadata: Optional[Sequence[Tuple[str, str]]] = None,
@@ -654,7 +643,6 @@ class CloudDLPHook(CloudBaseHook):
         name = DlpServiceClient.project_job_trigger_path(project_id, job_trigger_id)
         client.delete_job_trigger(name=name, retry=retry, timeout=timeout, metadata=metadata)
 
-    @CloudBaseHook.catch_http_exception
     def delete_stored_info_type(
         self,
         stored_info_type_id: str,
@@ -704,7 +692,6 @@ class CloudDLPHook(CloudBaseHook):
 
         client.delete_stored_info_type(name=name, retry=retry, timeout=timeout, metadata=metadata)
 
-    @CloudBaseHook.catch_http_exception
     def get_deidentify_template(
         self,
         template_id: str,
@@ -755,12 +742,11 @@ class CloudDLPHook(CloudBaseHook):
 
         return client.get_deidentify_template(name=name, retry=retry, timeout=timeout, metadata=metadata)
 
-    @CloudBaseHook.catch_http_exception
-    @CloudBaseHook.fallback_to_default_project_id
+    @GoogleBaseHook.fallback_to_default_project_id
     def get_dlp_job(
         self,
         dlp_job_id: str,
-        project_id: Optional[str] = None,
+        project_id: str,
         retry: Optional[Retry] = None,
         timeout: Optional[float] = None,
         metadata: Optional[Sequence[Tuple[str, str]]] = None,
@@ -794,7 +780,6 @@ class CloudDLPHook(CloudBaseHook):
         name = DlpServiceClient.dlp_job_path(project_id, dlp_job_id)
         return client.get_dlp_job(name=name, retry=retry, timeout=timeout, metadata=metadata)
 
-    @CloudBaseHook.catch_http_exception
     def get_inspect_template(
         self,
         template_id: str,
@@ -845,12 +830,11 @@ class CloudDLPHook(CloudBaseHook):
 
         return client.get_inspect_template(name=name, retry=retry, timeout=timeout, metadata=metadata)
 
-    @CloudBaseHook.catch_http_exception
-    @CloudBaseHook.fallback_to_default_project_id
+    @GoogleBaseHook.fallback_to_default_project_id
     def get_job_trigger(
         self,
         job_trigger_id: str,
-        project_id: Optional[str] = None,
+        project_id: str,
         retry: Optional[Retry] = None,
         timeout: Optional[float] = None,
         metadata: Optional[Sequence[Tuple[str, str]]] = None,
@@ -884,7 +868,6 @@ class CloudDLPHook(CloudBaseHook):
         name = DlpServiceClient.project_job_trigger_path(project_id, job_trigger_id)
         return client.get_job_trigger(name=name, retry=retry, timeout=timeout, metadata=metadata)
 
-    @CloudBaseHook.catch_http_exception
     def get_stored_info_type(
         self,
         stored_info_type_id: str,
@@ -935,11 +918,10 @@ class CloudDLPHook(CloudBaseHook):
 
         return client.get_stored_info_type(name=name, retry=retry, timeout=timeout, metadata=metadata)
 
-    @CloudBaseHook.catch_http_exception
-    @CloudBaseHook.fallback_to_default_project_id
+    @GoogleBaseHook.fallback_to_default_project_id
     def inspect_content(
         self,
-        project_id: Optional[str] = None,
+        project_id: str,
         inspect_config: Optional[Union[dict, InspectConfig]] = None,
         item: Optional[Union[dict, ContentItem]] = None,
         inspect_template_name: Optional[str] = None,
@@ -988,7 +970,6 @@ class CloudDLPHook(CloudBaseHook):
             metadata=metadata,
         )
 
-    @CloudBaseHook.catch_http_exception
     def list_deidentify_templates(
         self,
         organization_id: Optional[str] = None,
@@ -1050,11 +1031,10 @@ class CloudDLPHook(CloudBaseHook):
 
         return list(results)
 
-    @CloudBaseHook.catch_http_exception
-    @CloudBaseHook.fallback_to_default_project_id
+    @GoogleBaseHook.fallback_to_default_project_id
     def list_dlp_jobs(
         self,
-        project_id: Optional[str] = None,
+        project_id: str,
         results_filter: Optional[str] = None,
         page_size: Optional[int] = None,
         job_type: Optional[str] = None,
@@ -1107,7 +1087,6 @@ class CloudDLPHook(CloudBaseHook):
         )
         return list(results)
 
-    @CloudBaseHook.catch_http_exception
     def list_info_types(
         self,
         language_code: Optional[str] = None,
@@ -1147,7 +1126,6 @@ class CloudDLPHook(CloudBaseHook):
             metadata=metadata,
         )
 
-    @CloudBaseHook.catch_http_exception
     def list_inspect_templates(
         self,
         organization_id: Optional[str] = None,
@@ -1208,11 +1186,10 @@ class CloudDLPHook(CloudBaseHook):
         )
         return list(results)
 
-    @CloudBaseHook.catch_http_exception
-    @CloudBaseHook.fallback_to_default_project_id
+    @GoogleBaseHook.fallback_to_default_project_id
     def list_job_triggers(
         self,
-        project_id: Optional[str] = None,
+        project_id: str,
         page_size: Optional[int] = None,
         order_by: Optional[str] = None,
         results_filter: Optional[str] = None,
@@ -1261,7 +1238,6 @@ class CloudDLPHook(CloudBaseHook):
         )
         return list(results)
 
-    @CloudBaseHook.catch_http_exception
     def list_stored_info_types(
         self,
         organization_id: Optional[str] = None,
@@ -1322,11 +1298,10 @@ class CloudDLPHook(CloudBaseHook):
         )
         return list(results)
 
-    @CloudBaseHook.catch_http_exception
-    @CloudBaseHook.fallback_to_default_project_id
+    @GoogleBaseHook.fallback_to_default_project_id
     def redact_image(
         self,
-        project_id: Optional[str] = None,
+        project_id: str,
         inspect_config: Optional[Union[dict, InspectConfig]] = None,
         image_redaction_configs: Optional[
             Union[List[dict], List[RedactImageRequest.ImageRedactionConfig]]
@@ -1383,11 +1358,10 @@ class CloudDLPHook(CloudBaseHook):
             metadata=metadata,
         )
 
-    @CloudBaseHook.catch_http_exception
-    @CloudBaseHook.fallback_to_default_project_id
+    @GoogleBaseHook.fallback_to_default_project_id
     def reidentify_content(
         self,
-        project_id: Optional[str] = None,
+        project_id: str,
         reidentify_config: Optional[Union[dict, DeidentifyConfig]] = None,
         inspect_config: Optional[Union[dict, InspectConfig]] = None,
         item: Optional[Union[dict, ContentItem]] = None,
@@ -1445,7 +1419,6 @@ class CloudDLPHook(CloudBaseHook):
             metadata=metadata,
         )
 
-    @CloudBaseHook.catch_http_exception
     def update_deidentify_template(
         self,
         template_id: str,
@@ -1509,7 +1482,6 @@ class CloudDLPHook(CloudBaseHook):
             metadata=metadata,
         )
 
-    @CloudBaseHook.catch_http_exception
     def update_inspect_template(
         self,
         template_id: str,
@@ -1572,12 +1544,11 @@ class CloudDLPHook(CloudBaseHook):
             metadata=metadata,
         )
 
-    @CloudBaseHook.catch_http_exception
-    @CloudBaseHook.fallback_to_default_project_id
+    @GoogleBaseHook.fallback_to_default_project_id
     def update_job_trigger(
         self,
         job_trigger_id: str,
-        project_id: Optional[str] = None,
+        project_id: str,
         job_trigger: Optional[Union[dict, JobTrigger]] = None,
         update_mask: Optional[Union[dict, FieldMask]] = None,
         retry: Optional[Retry] = None,
@@ -1624,7 +1595,6 @@ class CloudDLPHook(CloudBaseHook):
             metadata=metadata,
         )
 
-    @CloudBaseHook.catch_http_exception
     def update_stored_info_type(
         self,
         stored_info_type_id: str,

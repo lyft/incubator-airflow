@@ -22,8 +22,8 @@ from unittest import mock
 
 from google.cloud.logging.resource import Resource
 
-from airflow import DAG
 from airflow.models import TaskInstance
+from airflow.models.dag import DAG
 from airflow.operators.dummy_operator import DummyOperator
 from airflow.utils.log.stackdriver_task_handler import StackdriverTaskHandler
 from airflow.utils.state import State
@@ -259,7 +259,7 @@ class TestStackdriverTaskHandlerAuthorization(unittest.TestCase):
         mock_client.assert_called_once_with(credentials=None, client_info=mock.ANY)
         self.assertEqual(mock_client.return_value, client)
 
-    @mock.patch("airflow.providers.google.cloud.hooks.base.CloudBaseHook")
+    @mock.patch("airflow.providers.google.common.hooks.base_google.GoogleBaseHook")
     @mock.patch('airflow.utils.log.stackdriver_task_handler.gcp_logging.Client')
     def test_should_support_gcp_conn_id(self, mock_client, mock_hook):
         stackdriver_task_handler = StackdriverTaskHandler(

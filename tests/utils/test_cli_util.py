@@ -23,7 +23,8 @@ from argparse import Namespace
 from contextlib import contextmanager
 from datetime import datetime
 
-from airflow import AirflowException, settings
+from airflow import settings
+from airflow.exceptions import AirflowException
 from airflow.utils import cli, cli_action_loggers
 
 
@@ -109,7 +110,3 @@ def fail_func(_):
 @cli.action_logging
 def success_func(_):
     pass
-
-
-if __name__ == '__main__':
-    unittest.main()

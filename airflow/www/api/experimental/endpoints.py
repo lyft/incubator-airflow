@@ -71,7 +71,7 @@ def trigger_dag(dag_id):
                 'Given execution date, {}, could not be identified '
                 'as a date. Example date format: 2015-11-16T14:34:15+00:00'
                 .format(execution_date))
-            log.info(error_message)
+            log.error(error_message)
             response = jsonify({'error': error_message})
             response.status_code = 400
 
@@ -199,6 +199,16 @@ def dag_paused(dag_id, paused):
     return jsonify({'response': 'ok'})
 
 
+@api_experimental.route('/dags/<string:dag_id>/paused', methods=['GET'])
+@requires_authentication
+def dag_is_paused(dag_id):
+    """Get paused state of a dag"""
+
+    is_paused = models.DagModel.get_dagmodel(dag_id).is_paused
+
+    return jsonify({'is_paused': is_paused})
+
+
 @api_experimental.route(
     '/dags/<string:dag_id>/dag_runs/<string:execution_date>/tasks/<string:task_id>',
     methods=['GET'])
@@ -219,7 +229,7 @@ def task_instance_info(dag_id, execution_date, task_id):
             'Given execution date, {}, could not be identified '
             'as a date. Example date format: 2015-11-16T14:34:15+00:00'
             .format(execution_date))
-        log.info(error_message)
+        log.error(error_message)
         response = jsonify({'error': error_message})
         response.status_code = 400
 
@@ -260,7 +270,7 @@ def dag_run_status(dag_id, execution_date):
             'Given execution date, {}, could not be identified '
             'as a date. Example date format: 2015-11-16T14:34:15+00:00'.format(
                 execution_date))
-        log.info(error_message)
+        log.error(error_message)
         response = jsonify({'error': error_message})
         response.status_code = 400
 
@@ -373,7 +383,7 @@ def get_lineage(dag_id: str, execution_date: str):
             'Given execution date, {}, could not be identified '
             'as a date. Example date format: 2015-11-16T14:34:15+00:00'.format(
                 execution_date))
-        log.info(error_message)
+        log.error(error_message)
         response = jsonify({'error': error_message})
         response.status_code = 400
 

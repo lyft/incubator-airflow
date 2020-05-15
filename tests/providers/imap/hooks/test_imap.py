@@ -20,7 +20,7 @@ import imaplib
 import unittest
 from unittest.mock import Mock, mock_open, patch
 
-from airflow import AirflowException
+from airflow.exceptions import AirflowException
 from airflow.models import Connection
 from airflow.providers.imap.hooks.imap import ImapHook
 from airflow.utils import db
@@ -303,7 +303,3 @@ class TestImapHook(unittest.TestCase):
 
         mock_imaplib.IMAP4_SSL.return_value.search.assert_called_once_with(None, mail_filter)
         assert mock_open_method.call_count == 1
-
-
-if __name__ == '__main__':
-    unittest.main()

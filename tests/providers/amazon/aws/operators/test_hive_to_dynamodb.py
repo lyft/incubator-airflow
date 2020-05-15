@@ -25,7 +25,7 @@ from unittest import mock
 import pandas as pd
 
 import airflow.providers.amazon.aws.operators.hive_to_dynamodb
-from airflow import DAG
+from airflow.models.dag import DAG
 from airflow.providers.amazon.aws.hooks.aws_dynamodb import AwsDynamoDBHook
 
 DEFAULT_DATE = datetime.datetime(2015, 1, 1)
@@ -137,7 +137,3 @@ class TestHiveToDynamoDBTransferOperator(unittest.TestCase):
         table = self.hook.get_conn().Table('test_airflow')
         table.meta.client.get_waiter('table_exists').wait(TableName='test_airflow')
         self.assertEqual(table.item_count, 1)
-
-
-if __name__ == '__main__':
-    unittest.main()

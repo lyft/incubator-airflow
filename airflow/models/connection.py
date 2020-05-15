@@ -33,6 +33,10 @@ from airflow.utils.module_loading import import_string
 # the path of the class and the name of the conn_id key parameter.
 # PLEASE KEEP BELOW LIST IN ALPHABETICAL ORDER.
 CONN_TYPE_TO_HOOK = {
+    "azure_batch": (
+        "airflow.providers.microsoft.azure.hooks.azure_batch.AzureBatchHook",
+        "azure_batch_conn_id"
+    ),
     "azure_cosmos": (
         "airflow.providers.microsoft.azure.hooks.azure_cosmos.AzureCosmosDBHook",
         "azure_cosmos_conn_id",
@@ -48,6 +52,7 @@ CONN_TYPE_TO_HOOK = {
         "airflow.providers.elasticsearch.hooks.elasticsearch.ElasticsearchHook",
         "elasticsearch_conn_id"
     ),
+    "exasol": ("airflow.providers.exasol.hooks.exasol.ExasolHook", "exasol_conn_id"),
     "gcpcloudsql": (
         "airflow.providers.google.cloud.hooks.cloud_sql.CloudSQLDatabaseHook",
         "gcp_cloudsql_conn_id",
@@ -61,6 +66,7 @@ CONN_TYPE_TO_HOOK = {
     "hiveserver2": ("airflow.providers.apache.hive.hooks.hive.HiveServer2Hook", "hiveserver2_conn_id"),
     "jdbc": ("airflow.providers.jdbc.hooks.jdbc.JdbcHook", "jdbc_conn_id"),
     "jira": ("airflow.providers.jira.hooks.jira.JiraHook", "jira_conn_id"),
+    "kubernetes": ("airflow.providers.cncf.kubernetes.hooks.kubernetes.KubernetesHook", "kubernetes_conn_id"),
     "mongo": ("airflow.providers.mongo.hooks.mongo.MongoHook", "conn_id"),
     "mssql": ("airflow.providers.microsoft.mssql.hooks.mssql.MsSqlHook", "mssql_conn_id"),
     "mysql": ("airflow.providers.mysql.hooks.mysql.MySqlHook", "mysql_conn_id"),
@@ -71,6 +77,7 @@ CONN_TYPE_TO_HOOK = {
     "presto": ("airflow.providers.presto.hooks.presto.PrestoHook", "presto_conn_id"),
     "redis": ("airflow.providers.redis.hooks.redis.RedisHook", "redis_conn_id"),
     "sqlite": ("airflow.providers.sqlite.hooks.sqlite.SqliteHook", "sqlite_conn_id"),
+    "tableau": ("airflow.providers.salesforce.hooks.tableau.TableauHook", "tableau_conn_id"),
     "vertica": ("airflow.providers.vertica.hooks.vertica.VerticaHook", "vertica_conn_id"),
     "wasb": ("airflow.providers.microsoft.azure.hooks.wasb.WasbHook", "wasb_conn_id"),
 }
@@ -115,6 +122,8 @@ class Connection(Base, LoggingMixin):
     _types = [
         ('docker', 'Docker Registry'),
         ('elasticsearch', 'Elasticsearch'),
+        ('exasol', 'Exasol'),
+        ('facebook_social', 'Facebook Social'),
         ('fs', 'File (path)'),
         ('ftp', 'FTP'),
         ('google_cloud_platform', 'Google Cloud Platform'),
@@ -148,6 +157,7 @@ class Connection(Base, LoggingMixin):
         ('snowflake', 'Snowflake'),
         ('segment', 'Segment'),
         ('sqoop', 'Sqoop'),
+        ('azure_batch', 'Azure Batch Service'),
         ('azure_data_lake', 'Azure Data Lake'),
         ('azure_container_instances', 'Azure Container Instances'),
         ('azure_cosmos', 'Azure CosmosDB'),
@@ -158,6 +168,10 @@ class Connection(Base, LoggingMixin):
         ('gcpcloudsql', 'Google Cloud SQL'),
         ('grpc', 'GRPC Connection'),
         ('yandexcloud', 'Yandex Cloud'),
+        ('livy', 'Apache Livy'),
+        ('tableau', 'Tableau'),
+        ('kubernetes', 'Kubernetes cluster Connection'),
+        ('spark', 'Spark'),
     ]
 
     def __init__(

@@ -15,29 +15,40 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+import pytest
 
-from tests.providers.google.cloud.operators.test_cloud_storage_transfer_service_system_helper import (
-    GCPTransferTestHelper,
+from airflow.providers.google.cloud.example_dags.example_cloud_storage_transfer_service_gcp import (
+    GCP_PROJECT_ID, GCP_TRANSFER_FIRST_TARGET_BUCKET, GCP_TRANSFER_SECOND_TARGET_BUCKET,
 )
 from tests.providers.google.cloud.utils.gcp_authenticator import GCP_GCS_TRANSFER_KEY
-from tests.test_utils.gcp_system_helpers import CLOUD_DAG_FOLDER, provide_gcp_context, skip_gcp_system
-from tests.test_utils.system_tests_class import SystemTest
+from tests.test_utils.gcp_system_helpers import CLOUD_DAG_FOLDER, GoogleSystemTest, provide_gcp_context
 
 
-@skip_gcp_system(GCP_GCS_TRANSFER_KEY, require_local_executor=True)
-class GcpTransferExampleDagsSystemTest(SystemTest):
-    helper = GCPTransferTestHelper()
+@pytest.fixture
+def helper():
+    with provide_gcp_context(GCP_GCS_TRANSFER_KEY):
+        # Create buckets
+        GoogleSystemTest.create_gcs_bucket(GCP_TRANSFER_SECOND_TARGET_BUCKET, location="asia-east1")
+        GoogleSystemTest.create_gcs_bucket(GCP_TRANSFER_FIRST_TARGET_BUCKET)
+        GoogleSystemTest.upload_content_to_gcs("test_contents", GCP_TRANSFER_FIRST_TARGET_BUCKET, "test.txt")
 
-    @provide_gcp_context(GCP_GCS_TRANSFER_KEY)
-    def setUp(self):
-        super().setUp()
-        self.helper.create_gcs_buckets()
+        # Grant bucket permissions
+        project_number = GoogleSystemTest.get_project_number(GCP_PROJECT_ID)
+        account_email = f"project-{project_number}@storage-transfer-service.iam.gserviceaccount.com"
+        GoogleSystemTest.grant_bucket_access(GCP_TRANSFER_FIRST_TARGET_BUCKET, account_email)
+        GoogleSystemTest.grant_bucket_access(GCP_TRANSFER_SECOND_TARGET_BUCKET, account_email)
 
-    @provide_gcp_context(GCP_GCS_TRANSFER_KEY)
-    def tearDown(self):
-        self.helper.delete_gcs_buckets()
-        super().tearDown()
+        yield
 
+        # Remove buckets
+        GoogleSystemTest.delete_gcs_bucket(GCP_TRANSFER_SECOND_TARGET_BUCKET)
+        GoogleSystemTest.delete_gcs_bucket(GCP_TRANSFER_FIRST_TARGET_BUCKET)
+
+
+@pytest.mark.backend("mysql", "postgres")
+@pytest.mark.credential_file(GCP_GCS_TRANSFER_KEY)
+class GcpTransferExampleDagsSystemTest(GoogleSystemTest):
+    @pytest.mark.usefixtures("helper")
     @provide_gcp_context(GCP_GCS_TRANSFER_KEY)
     def test_run_example_dag_compute(self):
         self.run_dag('example_gcp_transfer', CLOUD_DAG_FOLDER)

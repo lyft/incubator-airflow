@@ -24,7 +24,9 @@ import warnings
 from tempfile import NamedTemporaryFile
 from typing import Dict, Iterable, List, Optional, Union
 
-from airflow import AirflowException
+from google.api_core.exceptions import Conflict
+
+from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator
 from airflow.models.xcom import MAX_XCOM_SIZE
 from airflow.providers.google.cloud.hooks.gcs import GCSHook
@@ -133,13 +135,15 @@ class GCSCreateBucketOperator(BaseOperator):
             google_cloud_storage_conn_id=self.gcp_conn_id,
             delegate_to=self.delegate_to
         )
-
-        hook.create_bucket(bucket_name=self.bucket_name,
-                           resource=self.resource,
-                           storage_class=self.storage_class,
-                           location=self.location,
-                           project_id=self.project_id,
-                           labels=self.labels)
+        try:
+            hook.create_bucket(bucket_name=self.bucket_name,
+                               resource=self.resource,
+                               storage_class=self.storage_class,
+                               location=self.location,
+                               project_id=self.project_id,
+                               labels=self.labels)
+        except Conflict:  # HTTP 409
+            self.log.warning("Bucket %s already exists", self.bucket_name)
 
 
 class GCSListObjectsOperator(BaseOperator):
@@ -397,7 +401,7 @@ class GCSBucketCreateAclEntryOperator(BaseOperator):
 
     .. seealso::
         For more information on how to use this operator, take a look at the guide:
-        :ref:`howto/operator:GoogleCloudStorageBucketCreateAclEntryOperator`
+        :ref:`howto/operator:GCSBucketCreateAclEntryOperator`
 
     :param bucket: Name of a bucket.
     :type bucket: str
@@ -461,7 +465,7 @@ class GCSObjectCreateAclEntryOperator(BaseOperator):
 
     .. seealso::
         For more information on how to use this operator, take a look at the guide:
-        :ref:`howto/operator:GoogleCloudStorageObjectCreateAclEntryOperator`
+        :ref:`howto/operator:GCSObjectCreateAclEntryOperator`
 
     :param bucket: Name of a bucket.
     :type bucket: str
@@ -530,7 +534,7 @@ class GCSObjectCreateAclEntryOperator(BaseOperator):
                                user_project=self.user_project)
 
 
-class GcsFileTransformOperator(BaseOperator):
+class GCSFileTransformOperator(BaseOperator):
     """
     Copies data from a source GCS location to a temporary location on the
     local filesystem. Runs a transformation on this file as specified by
@@ -600,8 +604,9 @@ class GcsFileTransformOperator(BaseOperator):
                 close_fds=True
             )
             self.log.info("Process output:")
-            for line in iter(process.stdout.readline, b''):
-                self.log.info(line.decode(self.output_encoding).rstrip())
+            if process.stdout:
+                for line in iter(process.stdout.readline, b''):
+                    self.log.info(line.decode(self.output_encoding).rstrip())
 
             process.wait()
             if process.returncode > 0:

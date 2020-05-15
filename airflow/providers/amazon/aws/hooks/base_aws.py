@@ -26,9 +26,11 @@ This module contains Base AWS Hook.
 
 import configparser
 import logging
+from typing import Optional, Union
 
 import boto3
 from botocore.config import Config
+from cached_property import cached_property
 
 from airflow.exceptions import AirflowException
 from airflow.hooks.base_hook import BaseHook
@@ -40,20 +42,48 @@ class AwsBaseHook(BaseHook):
     This class is a thin wrapper around the boto3 python library.
 
     :param aws_conn_id: The Airflow connection used for AWS credentials.
-        If this is None then the default boto3 behaviour is used. If running Airflow
-        in a distributed manner and aws_conn_id is None, then default boto3 configuration
-        would be used (and must be maintained on each worker node).
+        If this is None or empty then the default boto3 behaviour is used. If
+        running Airflow in a distributed manner and aws_conn_id is None or
+        empty, then default boto3 configuration would be used (and must be
+        maintained on each worker node).
     :type aws_conn_id: str
     :param verify: Whether or not to verify SSL certificates.
         https://boto3.amazonaws.com/v1/documentation/api/latest/reference/core/session.html
-    :type verify: str or bool
+    :type verify: Union[bool, str, None]
+    :param region_name: AWS region_name. If not specified then the default boto3 behaviour is used.
+    :type region_name: Optional[str]
+    :param client_type: boto3.client client_type. Eg 's3', 'emr' etc
+    :type client_type: Optional[str]
+    :param resource_type: boto3.resource resource_type. Eg 'dynamodb' etc
+    :type resource_type: Optional[str]
+    :param config: Configuration for botocore client.
+        (https://boto3.amazonaws.com/v1/documentation/api/latest/reference/core/session.html)
+    :type config: Optional[botocore.client.Config]
     """
 
-    def __init__(self, aws_conn_id="aws_default", verify=None):
+    def __init__(
+            self,
+            aws_conn_id: Optional[str] = "aws_default",
+            verify: Union[bool, str, None] = None,
+            region_name: Optional[str] = None,
+            client_type: Optional[str] = None,
+            resource_type: Optional[str] = None,
+            config: Optional[Config] = None
+    ):
+        super().__init__()
         self.aws_conn_id = aws_conn_id
         self.verify = verify
-        self.config = None
+        self.client_type = client_type
+        self.resource_type = resource_type
+        self.region_name = region_name
+        self.config = config
 
+        if not (self.client_type or self.resource_type):
+            raise AirflowException(
+                'Either client_type or resource_type'
+                ' must be provided.')
+
+    # pylint: disable=too-many-statements
     def _get_credentials(self, region_name):
         aws_access_key_id = None
         aws_secret_access_key = None
@@ -156,26 +186,33 @@ class AwsBaseHook(BaseHook):
                         **session_kwargs
                     )
                     sts_client = sts_session.client("sts", config=self.config)
-                    # Assume role
+
                     assume_role_kwargs = dict()
                     if "assume_role_kwargs" in extra_config:
                         assume_role_kwargs = extra_config["assume_role_kwargs"]
-                    if "external_id" in extra_config:  # Backwards compatibility
-                        assume_role_kwargs["ExternalId"] = extra_config.get(
-                            "external_id"
-                        )
 
-                    role_session_name = "Airflow_" + self.aws_conn_id
-                    self.log.info(
-                        "Doing assume_role to role_arn=%s role_session_name=%s",
+                    assume_role_method = None
+                    if "assume_role_method" in extra_config:
+                        assume_role_method = extra_config['assume_role_method']
+                    self.log.info("assume_role_method=%s", assume_role_method)
+                    method = None
+                    if not assume_role_method or assume_role_method == 'assume_role':
+                        method = self._assume_role
+                    elif assume_role_method == 'assume_role_with_saml':
+                        method = self._assume_role_with_saml
+                    else:
+                        raise NotImplementedError(
+                            f'assume_role_method={assume_role_method} in Connection {self.aws_conn_id} Extra.'
+                            'Currently "assume_role" or "assume_role_with_saml" are supported.'
+                            '(Exclude this setting will default to "assume_role").')
+
+                    sts_response = method(
+                        sts_client,
+                        extra_config,
                         role_arn,
-                        role_session_name,
+                        assume_role_kwargs
                     )
-                    sts_response = sts_client.assume_role(
-                        RoleArn=role_arn,
-                        RoleSessionName=role_session_name,
-                        **assume_role_kwargs
-                    )
+
                     # Use credentials retrieved from STS
                     credentials = sts_response["Credentials"]
                     aws_access_key_id = credentials["AccessKeyId"]
@@ -206,8 +243,108 @@ class AwsBaseHook(BaseHook):
             endpoint_url,
         )
 
+    def _assume_role(
+            self,
+            sts_client: boto3.client,
+            extra_config: dict,
+            role_arn: str,
+            assume_role_kwargs: dict):
+        if "external_id" in extra_config:  # Backwards compatibility
+            assume_role_kwargs["ExternalId"] = extra_config.get(
+                "external_id"
+            )
+        role_session_name = f"Airflow_{self.aws_conn_id}"
+        self.log.info(
+            "Doing sts_client.assume_role to role_arn=%s (role_session_name=%s)",
+            role_arn,
+            role_session_name,
+        )
+        return sts_client.assume_role(
+            RoleArn=role_arn,
+            RoleSessionName=role_session_name,
+            **assume_role_kwargs
+        )
+
+    def _assume_role_with_saml(
+            self,
+            sts_client: boto3.client,
+            extra_config: dict,
+            role_arn: str,
+            assume_role_kwargs: dict):
+
+        saml_config = extra_config['assume_role_with_saml']
+        principal_arn = saml_config['principal_arn']
+
+        idp_url = saml_config["idp_url"]
+        self.log.info("idp_url= %s", idp_url)
+
+        idp_request_kwargs = saml_config["idp_request_kwargs"]
+
+        idp_auth_method = saml_config['idp_auth_method']
+        if idp_auth_method == 'http_spegno_auth':
+            # requests_gssapi will need paramiko > 2.6 since you'll need
+            # 'gssapi' not 'python-gssapi' from PyPi.
+            # https://github.com/paramiko/paramiko/pull/1311
+            import requests_gssapi
+            auth = requests_gssapi.HTTPSPNEGOAuth()
+            if 'mutual_authentication' in saml_config:
+                mutual_auth = saml_config['mutual_authentication']
+                if mutual_auth == 'REQUIRED':
+                    auth = requests_gssapi.HTTPSPNEGOAuth(requests_gssapi.REQUIRED)
+                elif mutual_auth == 'OPTIONAL':
+                    auth = requests_gssapi.HTTPSPNEGOAuth(requests_gssapi.OPTIONAL)
+                elif mutual_auth == 'DISABLED':
+                    auth = requests_gssapi.HTTPSPNEGOAuth(requests_gssapi.DISABLED)
+                else:
+                    raise NotImplementedError(
+                        f'mutual_authentication={mutual_auth} in Connection {self.aws_conn_id} Extra.'
+                        'Currently "REQUIRED", "OPTIONAL" and "DISABLED" are supported.'
+                        '(Exclude this setting will default to HTTPSPNEGOAuth() ).')
+
+            # Query the IDP
+            import requests
+            idp_reponse = requests.get(
+                idp_url, auth=auth, **idp_request_kwargs)
+            idp_reponse.raise_for_status()
+
+            # Assist with debugging. Note: contains sensitive info!
+            xpath = saml_config['saml_response_xpath']
+            log_idp_response = 'log_idp_response' in saml_config and saml_config[
+                'log_idp_response']
+            if log_idp_response:
+                self.log.warning(
+                    'The IDP response contains sensitive information,'
+                    ' but log_idp_response is ON (%s).', log_idp_response)
+                self.log.info('idp_reponse.content= %s', idp_reponse.content)
+                self.log.info('xpath= %s', xpath)
+
+            # Extract SAML Assertion from the returned HTML / XML
+            from lxml import etree
+            xml = etree.fromstring(idp_reponse.content)
+            saml_assertion = xml.xpath(xpath)
+            if isinstance(saml_assertion, list):
+                if len(saml_assertion) == 1:
+                    saml_assertion = saml_assertion[0]
+            if not saml_assertion:
+                raise ValueError('Invalid SAML Assertion')
+        else:
+            raise NotImplementedError(
+                f'idp_auth_method={idp_auth_method} in Connection {self.aws_conn_id} Extra.'
+                'Currently only "http_spegno_auth" is supported, and must be specified.')
+
+        self.log.info(
+            "Doing sts_client.assume_role_with_saml to role_arn=%s",
+            role_arn
+        )
+        return sts_client.assume_role_with_saml(
+            RoleArn=role_arn,
+            PrincipalArn=principal_arn,
+            SAMLAssertion=saml_assertion,
+            **assume_role_kwargs
+        )
+
     def get_client_type(self, client_type, region_name=None, config=None):
-        """ Get the underlying boto3 client using boto3 session"""
+        """Get the underlying boto3 client using boto3 session"""
         session, endpoint_url = self._get_credentials(region_name)
 
         # No AWS Operators use the config argument to this method.
@@ -220,7 +357,7 @@ class AwsBaseHook(BaseHook):
         )
 
     def get_resource_type(self, resource_type, region_name=None, config=None):
-        """ Get the underlying boto3 resource using boto3 session"""
+        """Get the underlying boto3 resource using boto3 session"""
         session, endpoint_url = self._get_credentials(region_name)
 
         # No AWS Operators use the config argument to this method.
@@ -232,13 +369,43 @@ class AwsBaseHook(BaseHook):
             resource_type, endpoint_url=endpoint_url, config=config, verify=self.verify
         )
 
+    @cached_property
+    def conn(self):
+        """
+        Get the underlying boto3 client/resource (cached)
+
+        :return: boto3.client or boto3.resource
+        :rtype: Union[boto3.client, boto3.resource]
+        """
+        if self.client_type:
+            return self.get_client_type(self.client_type, region_name=self.region_name)
+        elif self.resource_type:
+            return self.get_resource_type(self.resource_type, region_name=self.region_name)
+        else:
+            # Rare possibility - subclasses have not specified a client_type or resource_type
+            raise NotImplementedError('Could not get boto3 connection!')
+
+    def get_conn(self):
+        """
+        Get the underlying boto3 client/resource (cached)
+
+        Implemented so that caching works as intended. It exists for compatibility
+        with subclasses that rely on a super().get_conn() method.
+
+        :return: boto3.client or boto3.resource
+        :rtype: Union[boto3.client, boto3.resource]
+        """
+        # Compat shim
+        return self.conn
+
     def get_session(self, region_name=None):
         """Get the underlying boto3.session."""
         session, _ = self._get_credentials(region_name)
         return session
 
     def get_credentials(self, region_name=None):
-        """Get the underlying `botocore.Credentials` object.
+        """
+        Get the underlying `botocore.Credentials` object.
 
         This contains the following authentication attributes: access_key, secret_key and token.
         """

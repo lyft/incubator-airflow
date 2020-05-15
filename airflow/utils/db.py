@@ -17,13 +17,14 @@
 # under the License.
 import logging
 import os
+import time
 
 from sqlalchemy import Table
 
 from airflow import settings
 from airflow.configuration import conf
 # noinspection PyUnresolvedReferences
-from airflow.jobs.base_job import BaseJob  # noqa: F401  # pylint: disable=unused-import
+from airflow.jobs.base_job import BaseJob  # noqa: F401 # pylint: disable=unused-import
 # noinspection PyUnresolvedReferences
 from airflow.models import (  # noqa: F401 # pylint: disable=unused-import
     DAG, XCOM_RETURN_KEY, BaseOperator, BaseOperatorLink, Connection, DagBag, DagModel, DagPickle, DagRun,
@@ -32,7 +33,10 @@ from airflow.models import (  # noqa: F401 # pylint: disable=unused-import
 # We need to add this model manually to get reset working well
 # noinspection PyUnresolvedReferences
 from airflow.models.serialized_dag import SerializedDagModel  # noqa: F401  # pylint: disable=unused-import
-from airflow.utils.session import create_session, provide_session  # noqa  # pylint: disable=unused-import
+# TODO: remove create_session once we decide to break backward compatibility
+from airflow.utils.session import (  # noqa: F401 # pylint: disable=unused-import
+    create_session, provide_session,
+)
 
 log = logging.getLogger(__name__)
 
@@ -85,6 +89,16 @@ def create_default_connections(session=None):
             conn_type="aws",
         ),
         session
+    )
+    merge_conn(
+        Connection(
+            conn_id="azure_batch_default",
+            conn_type="azure_batch",
+            extra='''{"account_name": "<ACCOUNT_NAME>", "account_key": "<ACCOUNT_KEY>",
+                      "account_url": "<ACCOUNT_URL>", "vm_publisher": "<VM_PUBLISHER>",
+                      "vm_offer": "<VM_OFFER>", "vm_sku": "<VM_SKU>",
+                      "vm_version": "<VM_VERSION>", "node_agent_sku_id": "<NODE_AGENT_SKU_ID>"}'''
+        )
     )
     merge_conn(
         Connection(
@@ -229,6 +243,20 @@ def create_default_connections(session=None):
     )
     merge_conn(
         Connection(
+            conn_id="facebook_default",
+            conn_type="facebook_social",
+            extra="""
+                {   "account_id": "<AD_ACCOUNNT_ID>",
+                    "app_id": "<FACEBOOK_APP_ID>",
+                    "app_secret": "<FACEBOOK_APP_SECRET>",
+                    "access_token": "<FACEBOOK_AD_ACCESS_TOKEN>"
+                }
+            """,
+        ),
+        session
+    )
+    merge_conn(
+        Connection(
             conn_id="fs_default",
             conn_type="fs",
             extra='{"path": "/"}',
@@ -269,6 +297,22 @@ def create_default_connections(session=None):
             conn_id="http_default",
             conn_type="http",
             host="https://www.httpbin.org/",
+        ),
+        session
+    )
+    merge_conn(
+        Connection(
+            conn_id='kubernetes_default',
+            conn_type='kubernetes',
+        ),
+        session
+    )
+    merge_conn(
+        Connection(
+            conn_id="livy_default",
+            conn_type="livy",
+            host="livy",
+            port=8998
         ),
         session
     )
@@ -344,6 +388,16 @@ def create_default_connections(session=None):
             conn_type="pinot",
             host="localhost",
             port=9000,
+        ),
+        session
+    )
+    merge_conn(
+        Connection(
+            conn_id="pinot_broker_default",
+            conn_type="pinot",
+            host="localhost",
+            port=9000,
+            extra='{"endpoint": "/query", "schema": "http"}',
         ),
         session
     )
@@ -440,6 +494,17 @@ def create_default_connections(session=None):
     )
     merge_conn(
         Connection(
+            conn_id="tableau_default",
+            conn_type="tableau",
+            host="https://tableau.server.url",
+            login="user",
+            password="password",
+            extra='{"site_id": "my_site"}',
+        ),
+        session
+    )
+    merge_conn(
+        Connection(
             conn_id="vertica_default",
             conn_type="vertica",
             host="localhost",
@@ -480,12 +545,13 @@ def initdb():
     """
     upgradedb()
 
-    create_default_connections()
+    if conf.getboolean('core', 'LOAD_DEFAULT_CONNECTIONS'):
+        create_default_connections()
 
     dagbag = DagBag()
-    # Save individual DAGs in the ORM
-    for dag in dagbag.dags.values():
-        dag.sync_to_db()
+    # Save DAGs in the ORM
+    dagbag.sync_to_db()
+
     # Deactivate the unknown ones
     DAG.deactivate_unknown_dags(dagbag.dags.keys())
 
@@ -493,12 +559,7 @@ def initdb():
     Base.metadata.create_all(settings.engine)  # pylint: disable=no-member
 
 
-def upgradedb():
-    """
-    Upgrade the database.
-    """
-    # alembic adds significant import time, so we import it lazily
-    from alembic import command
+def _get_alembic_config():
     from alembic.config import Config
 
     log.info("Creating tables")
@@ -508,6 +569,47 @@ def upgradedb():
     directory = os.path.join(package_dir, 'migrations')
     config = Config(os.path.join(package_dir, 'alembic.ini'))
     config.set_main_option('script_location', directory.replace('%', '%%'))
+    config.set_main_option('sqlalchemy.url', settings.SQL_ALCHEMY_CONN.replace('%', '%%'))
+    return config
+
+
+def check_migrations(timeout):
+    """
+    Function to wait for all airflow migrations to complete.
+    @param timeout:
+    @return:
+    """
+    from alembic.runtime.migration import MigrationContext
+    from alembic.script import ScriptDirectory
+
+    config = _get_alembic_config()
+    script_ = ScriptDirectory.from_config(config)
+    with settings.engine.connect() as connection:
+        context = MigrationContext.configure(connection)
+        ticker = 0
+        while True:
+            source_heads = set(script_.get_heads())
+            db_heads = set(context.get_current_heads())
+            if source_heads == db_heads:
+                break
+            if ticker >= timeout:
+                raise TimeoutError("There are still unapplied migrations after {} "
+                                   "seconds.".format(ticker))
+            ticker += 1
+            time.sleep(1)
+            log.info('Waiting for migrations... %s second(s)', ticker)
+
+
+def upgradedb():
+    """
+    Upgrade the database.
+    """
+    # alembic adds significant import time, so we import it lazily
+    from alembic import command
+
+    log.info("Creating tables")
+    config = _get_alembic_config()
+
     config.set_main_option('sqlalchemy.url', settings.SQL_ALCHEMY_CONN.replace('%', '%%'))
     command.upgrade(config, 'heads')
     add_default_pool_if_not_exists()

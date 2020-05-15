@@ -45,6 +45,7 @@ from airflow.models.taskinstance import TaskInstance, clear_task_instances
 from airflow.models.xcom import XCOM_RETURN_KEY
 from airflow.ti_deps.deps.base_ti_dep import BaseTIDep
 from airflow.ti_deps.deps.not_in_retry_period_dep import NotInRetryPeriodDep
+from airflow.ti_deps.deps.not_previously_skipped_dep import NotPreviouslySkippedDep
 from airflow.ti_deps.deps.prev_dagrun_dep import PrevDagrunDep
 from airflow.ti_deps.deps.trigger_rule_dep import TriggerRuleDep
 from airflow.utils import timezone
@@ -126,22 +127,18 @@ class BaseOperator(Operator, LoggingMixin):
     :param end_date: if specified, the scheduler won't go beyond this date
     :type end_date: datetime.datetime
     :param depends_on_past: when set to true, task instances will run
-        sequentially while relying on the previous task's schedule to
-        succeed. The task instance for the start_date is allowed to run.
+        sequentially and only if the previous instance has succeeded or has been skipped.
+        The task instance for the start_date is allowed to run.
     :type depends_on_past: bool
     :param wait_for_downstream: when set to true, an instance of task
         X will wait for tasks immediately downstream of the previous instance
-        of task X to finish successfully before it runs. This is useful if the
+        of task X to finish successfully or be skipped before it runs. This is useful if the
         different instances of a task X alter the same asset, and this asset
         is used by tasks downstream of task X. Note that depends_on_past
         is forced to True wherever wait_for_downstream is used. Also note that
         only tasks *immediately* downstream of the previous task instance are waited
         for; the statuses of any tasks further downstream are ignored.
     :type wait_for_downstream: bool
-    :param queue: which queue to target when running this job. Not
-        all executors implement queue management, the CeleryExecutor
-        does support targeting specific queues.
-    :type queue: str
     :param dag: a reference to the dag the task is attached to (if any)
     :type dag: airflow.models.DAG
     :param priority_weight: priority weight of this task against other task.
@@ -172,7 +169,9 @@ class BaseOperator(Operator, LoggingMixin):
         DAGS. Options can be set as string or using the constants defined in
         the static class ``airflow.utils.WeightRule``
     :type weight_rule: str
-    :param queue: specifies which task queue to use
+    :param queue: which queue to target when running this job. Not
+        all executors implement queue management, the CeleryExecutor
+        does support targeting specific queues.
     :type queue: str
     :param pool: the slot pool this task should run in, slot pools are a
         way to limit concurrency for certain tasks
@@ -213,7 +212,7 @@ class BaseOperator(Operator, LoggingMixin):
     :param trigger_rule: defines the rule by which dependencies are applied
         for the task to get triggered. Options are:
         ``{ all_success | all_failed | all_done | one_success |
-        one_failed | none_failed | none_skipped | dummy}``
+        one_failed | none_failed | none_failed_or_skipped | none_skipped | dummy}``
         default is ``all_success``. Options can be set as string or
         using the constants defined in the static class
         ``airflow.utils.TriggerRule``
@@ -317,7 +316,7 @@ class BaseOperator(Operator, LoggingMixin):
         priority_weight: int = 1,
         weight_rule: str = WeightRule.DOWNSTREAM,
         queue: str = conf.get('celery', 'default_queue'),
-        pool: str = Pool.DEFAULT_POOL_NAME,
+        pool: Optional[str] = None,
         pool_slots: int = 1,
         sla: Optional[timedelta] = None,
         execution_timeout: Optional[timedelta] = None,
@@ -386,7 +385,7 @@ class BaseOperator(Operator, LoggingMixin):
 
         self.retries = retries
         self.queue = queue
-        self.pool = pool
+        self.pool = Pool.DEFAULT_POOL_NAME if pool is None else pool
         self.pool_slots = pool_slots
         if self.pool_slots < 1:
             raise AirflowException("pool slots for %s in dag %s cannot be less than 1"
@@ -472,38 +471,20 @@ class BaseOperator(Operator, LoggingMixin):
     def __rshift__(self, other):
         """
         Implements Self >> Other == self.set_downstream(other)
-
-        If "Other" is a DAG, the DAG is assigned to the Operator.
         """
-        from airflow.models.dag import DAG
-        if isinstance(other, DAG):
-            # if this dag is already assigned, do nothing
-            # otherwise, do normal dag assignment
-            if not (self.has_dag() and self.dag is other):
-                self.dag = other
-        else:
-            self.set_downstream(other)
+        self.set_downstream(other)
         return other
 
     def __lshift__(self, other):
         """
         Implements Self << Other == self.set_upstream(other)
-
-        If "Other" is a DAG, the DAG is assigned to the Operator.
         """
-        from airflow.models.dag import DAG
-        if isinstance(other, DAG):
-            # if this dag is already assigned, do nothing
-            # otherwise, do normal dag assignment
-            if not (self.has_dag() and self.dag is other):
-                self.dag = other
-        else:
-            self.set_upstream(other)
+        self.set_upstream(other)
         return other
 
     def __rrshift__(self, other):
         """
-        Called for [DAG] >> [Operator] because DAGs don't have
+        Called for Operator >> [Operator] because list don't have
         __rshift__ operators.
         """
         self.__lshift__(other)
@@ -511,7 +492,7 @@ class BaseOperator(Operator, LoggingMixin):
 
     def __rlshift__(self, other):
         """
-        Called for [DAG] << [Operator] because DAGs don't have
+        Called for Operator << [Operator] because list don't have
         __lshift__ operators.
         """
         self.__rshift__(other)
@@ -650,6 +631,7 @@ class BaseOperator(Operator, LoggingMixin):
             NotInRetryPeriodDep(),
             PrevDagrunDep(),
             TriggerRuleDep(),
+            NotPreviouslySkippedDep(),
         }
 
     @property
@@ -674,7 +656,7 @@ class BaseOperator(Operator, LoggingMixin):
 
         if not self._dag:
             return self.priority_weight
-        from airflow import DAG
+        from airflow.models.dag import DAG
         dag: DAG = self._dag
         return self.priority_weight + sum(
             map(lambda task_id: dag.task_dict[task_id].priority_weight,
@@ -686,8 +668,11 @@ class BaseOperator(Operator, LoggingMixin):
         """Returns dictionary of all extra links for the operator"""
 
         op_extra_links_from_plugin: Dict[str, Any] = {}
-        from airflow.plugins_manager import operator_extra_links
-        for ope in operator_extra_links:
+        from airflow import plugins_manager
+        plugins_manager.initialize_extra_operators_links_plugins()
+        if plugins_manager.operator_extra_links is None:
+            raise AirflowException("Can't load operators")
+        for ope in plugins_manager.operator_extra_links:
             if ope.operators and self.__class__ in ope.operators:
                 op_extra_links_from_plugin.update({ope.name: ope})
 
@@ -702,8 +687,11 @@ class BaseOperator(Operator, LoggingMixin):
     @cached_property
     def global_operator_extra_link_dict(self) -> Dict[str, Any]:
         """Returns dictionary of all global extra links"""
-        from airflow.plugins_manager import global_operator_extra_links
-        return {link.name: link for link in global_operator_extra_links}
+        from airflow import plugins_manager
+        plugins_manager.initialize_extra_operators_links_plugins()
+        if plugins_manager.global_operator_extra_links is None:
+            raise AirflowException("Can't load operators")
+        return {link.name: link for link in plugins_manager.global_operator_extra_links}
 
     @prepare_lineage
     def pre_execute(self, context: Any):
@@ -816,12 +804,17 @@ class BaseOperator(Operator, LoggingMixin):
         if not jinja_env:
             jinja_env = self.get_template_env()
 
+        # Imported here to avoid ciruclar dependency
+        from airflow.models.xcom_arg import XComArg
+
         if isinstance(content, str):
             if any(content.endswith(ext) for ext in self.template_ext):
                 # Content contains a filepath
                 return jinja_env.get_template(content).render(**context)
             else:
                 return jinja_env.from_string(content).render(**context)
+        elif isinstance(content, XComArg):
+            return content.resolve(context)
 
         if isinstance(content, tuple):
             if type(content) is not tuple:  # pylint: disable=unidiomatic-typecheck
@@ -1001,7 +994,7 @@ class BaseOperator(Operator, LoggingMixin):
         """
         if not self._dag:
             return set()
-        from airflow import DAG
+        from airflow.models.dag import DAG
         dag: DAG = self._dag
         return list(map(lambda task_id: dag.task_dict[task_id],
                         self.get_flat_relative_ids(upstream)))
@@ -1010,7 +1003,7 @@ class BaseOperator(Operator, LoggingMixin):
             self,
             start_date: Optional[datetime] = None,
             end_date: Optional[datetime] = None,
-            ignore_first_depends_on_past: bool = False,
+            ignore_first_depends_on_past: bool = True,
             ignore_ti_state: bool = False,
             mark_success: bool = False) -> None:
         """
@@ -1076,10 +1069,23 @@ class BaseOperator(Operator, LoggingMixin):
                        task_or_task_list: Union['BaseOperator', List['BaseOperator']],
                        upstream: bool = False) -> None:
         """Sets relatives for the task or task list."""
-        try:
-            task_list = list(task_or_task_list)  # type: ignore
-        except TypeError:
-            task_list = [task_or_task_list]  # type: ignore
+        from airflow.models.xcom_arg import XComArg
+
+        if isinstance(task_or_task_list, XComArg):
+            # otherwise we will start to iterate over xcomarg
+            # because of the "list" check below
+            # with current XComArg.__getitem__ implementation
+            task_list = [task_or_task_list.operator]
+        else:
+            try:
+                task_list = list(task_or_task_list)  # type: ignore
+            except TypeError:
+                task_list = [task_or_task_list]  # type: ignore
+
+            task_list = [
+                t.operator if isinstance(t, XComArg) else t  # type: ignore
+                for t in task_list
+            ]
 
         for task in task_list:
             if not isinstance(task, BaseOperator):
@@ -1132,6 +1138,12 @@ class BaseOperator(Operator, LoggingMixin):
         task.
         """
         self._set_relatives(task_or_task_list, upstream=True)
+
+    @property
+    def output(self):
+        """Returns default XComArg for the operator"""
+        from airflow.models.xcom_arg import XComArg
+        return XComArg(operator=self)
 
     @staticmethod
     def xcom_push(

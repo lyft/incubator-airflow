@@ -16,16 +16,20 @@
 # specific language governing permissions and limitations
 # under the License.
 #
+
+import gzip as gz
+import os
 import tempfile
+from unittest.mock import Mock
 
 import boto3
 import mock
 import pytest
 from botocore.exceptions import NoCredentialsError
 
-from airflow import AirflowException
+from airflow.exceptions import AirflowException
 from airflow.models import Connection
-from airflow.providers.amazon.aws.hooks.s3 import S3Hook, provide_bucket_name
+from airflow.providers.amazon.aws.hooks.s3 import S3Hook, provide_bucket_name, unify_bucket_name_and_key
 
 try:
     from moto import mock_s3
@@ -228,11 +232,27 @@ class TestAwsS3Hook:
         resource = boto3.resource('s3').Object(s3_bucket, 'my_key')  # pylint: disable=no-member
         assert resource.get()['Body'].read() == b'Cont\xC3\xA9nt'
 
+    def test_load_string_acl(self, s3_bucket):
+        hook = S3Hook()
+        hook.load_string("Contént", "my_key", s3_bucket,
+                         acl_policy='public-read')
+        response = boto3.client('s3').get_object_acl(Bucket=s3_bucket, Key="my_key", RequestPayer='requester')
+        assert ((response['Grants'][1]['Permission'] == 'READ') and
+                (response['Grants'][0]['Permission'] == 'FULL_CONTROL'))
+
     def test_load_bytes(self, s3_bucket):
         hook = S3Hook()
         hook.load_bytes(b"Content", "my_key", s3_bucket)
         resource = boto3.resource('s3').Object(s3_bucket, 'my_key')  # pylint: disable=no-member
         assert resource.get()['Body'].read() == b'Content'
+
+    def test_load_bytes_acl(self, s3_bucket):
+        hook = S3Hook()
+        hook.load_bytes(b"Content", "my_key", s3_bucket,
+                        acl_policy='public-read')
+        response = boto3.client('s3').get_object_acl(Bucket=s3_bucket, Key="my_key", RequestPayer='requester')
+        assert ((response['Grants'][1]['Permission'] == 'READ') and
+                (response['Grants'][0]['Permission'] == 'FULL_CONTROL'))
 
     def test_load_fileobj(self, s3_bucket):
         hook = S3Hook()
@@ -243,6 +263,56 @@ class TestAwsS3Hook:
             resource = boto3.resource('s3').Object(s3_bucket, 'my_key')  # pylint: disable=no-member
             assert resource.get()['Body'].read() == b'Content'
 
+    def test_load_fileobj_acl(self, s3_bucket):
+        hook = S3Hook()
+        with tempfile.TemporaryFile() as temp_file:
+            temp_file.write(b"Content")
+            temp_file.seek(0)
+            hook.load_file_obj(temp_file, "my_key", s3_bucket,
+                               acl_policy='public-read')
+            response = boto3.client('s3').get_object_acl(Bucket=s3_bucket,
+                                                         Key="my_key",
+                                                         RequestPayer='requester')  # pylint: disable=no-member # noqa: E501 # pylint: disable=C0301
+            assert ((response['Grants'][1]['Permission'] == 'READ') and
+                    (response['Grants'][0]['Permission'] == 'FULL_CONTROL'))
+
+    def test_load_file_gzip(self, s3_bucket):
+        hook = S3Hook()
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            temp_file.write(b"Content")
+            temp_file.seek(0)
+            hook.load_file(temp_file.name, "my_key", s3_bucket, gzip=True)
+            resource = boto3.resource('s3').Object(s3_bucket, 'my_key')  # pylint: disable=no-member
+            assert gz.decompress(resource.get()['Body'].read()) == b'Content'
+            os.unlink(temp_file.name)
+
+    def test_load_file_acl(self, s3_bucket):
+        hook = S3Hook()
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            temp_file.write(b"Content")
+            temp_file.seek(0)
+            hook.load_file(temp_file.name, "my_key", s3_bucket, gzip=True,
+                           acl_policy='public-read')
+            response = boto3.client('s3').get_object_acl(Bucket=s3_bucket,
+                                                         Key="my_key",
+                                                         RequestPayer='requester')  # pylint: disable=no-member # noqa: E501 # pylint: disable=C0301
+            assert ((response['Grants'][1]['Permission'] == 'READ') and
+                    (response['Grants'][0]['Permission'] == 'FULL_CONTROL'))
+            os.unlink(temp_file.name)
+
+    def test_copy_object_acl(self, s3_bucket):
+        hook = S3Hook()
+        with tempfile.NamedTemporaryFile() as temp_file:
+            temp_file.write(b"Content")
+            temp_file.seek(0)
+            hook.load_file_obj(temp_file, "my_key", s3_bucket)
+            hook.copy_object("my_key", "my_key", s3_bucket, s3_bucket)
+            response = boto3.client('s3').get_object_acl(Bucket=s3_bucket,
+                                                         Key="my_key",
+                                                         RequestPayer='requester')  # pylint: disable=no-member # noqa: E501 # pylint: disable=C0301
+            assert ((response['Grants'][0]['Permission'] == 'FULL_CONTROL') and
+                    (len(response['Grants']) == 1))
+
     @mock.patch.object(S3Hook, 'get_connection', return_value=Connection(schema='test_bucket'))
     def test_provide_bucket_name(self, mock_get_connection):
 
@@ -252,24 +322,13 @@ class TestAwsS3Hook:
             def test_function(self, bucket_name=None):
                 return bucket_name
 
-            # pylint: disable=unused-argument
-            @provide_bucket_name
-            def test_function_with_key(self, key, bucket_name=None):
-                return bucket_name
-
-            # pylint: disable=unused-argument
-            @provide_bucket_name
-            def test_function_with_wildcard_key(self, wildcard_key, bucket_name=None):
-                return bucket_name
-
         fake_s3_hook = FakeS3Hook()
-        test_bucket_name = fake_s3_hook.test_function()
-        test_bucket_name_with_key = fake_s3_hook.test_function_with_key('test_key')
-        test_bucket_name_with_wildcard_key = fake_s3_hook.test_function_with_wildcard_key('test_*_key')
 
+        test_bucket_name = fake_s3_hook.test_function()
         assert test_bucket_name == mock_get_connection.return_value.schema
-        assert test_bucket_name_with_key is None
-        assert test_bucket_name_with_wildcard_key is None
+
+        test_bucket_name = fake_s3_hook.test_function(bucket_name='bucket')
+        assert test_bucket_name == 'bucket'
 
     def test_delete_objects_key_does_not_exist(self, s3_bucket):
         hook = S3Hook()
@@ -298,3 +357,60 @@ class TestAwsS3Hook:
         hook = S3Hook()
         hook.delete_objects(bucket=s3_bucket, keys=keys)
         assert [o.key for o in mocked_s3_res.Bucket(s3_bucket).objects.all()] == []
+
+    def test_unify_bucket_name_and_key(self):
+
+        class FakeS3Hook(S3Hook):
+
+            @unify_bucket_name_and_key
+            def test_function_with_wildcard_key(self, wildcard_key, bucket_name=None):
+                return bucket_name, wildcard_key
+
+            @unify_bucket_name_and_key
+            def test_function_with_key(self, key, bucket_name=None):
+                return bucket_name, key
+
+            @unify_bucket_name_and_key
+            def test_function_with_test_key(self, test_key, bucket_name=None):
+                return bucket_name, test_key
+
+        fake_s3_hook = FakeS3Hook()
+
+        test_bucket_name_with_wildcard_key = fake_s3_hook.test_function_with_wildcard_key('s3://foo/bar*.csv')
+        assert ('foo', 'bar*.csv') == test_bucket_name_with_wildcard_key
+
+        test_bucket_name_with_key = fake_s3_hook.test_function_with_key('s3://foo/bar.csv')
+        assert ('foo', 'bar.csv') == test_bucket_name_with_key
+
+        with pytest.raises(ValueError) as err:
+            fake_s3_hook.test_function_with_test_key('s3://foo/bar.csv')
+        assert isinstance(err.value, ValueError)
+
+    @mock.patch('airflow.providers.amazon.aws.hooks.s3.NamedTemporaryFile')
+    def test_download_file(self, mock_temp_file):
+        mock_temp_file.return_value.__enter__ = Mock(return_value=mock_temp_file)
+        s3_hook = S3Hook(aws_conn_id='s3_test')
+        s3_hook.check_for_key = Mock(return_value=True)
+        s3_obj = Mock()
+        s3_obj.download_fileobj = Mock(return_value=None)
+        s3_hook.get_key = Mock(return_value=s3_obj)
+        key = 'test_key'
+        bucket = 'test_bucket'
+
+        s3_hook.download_file(key=key, bucket_name=bucket)
+
+        s3_hook.check_for_key.assert_called_once_with(key, bucket)
+        s3_hook.get_key.assert_called_once_with(key, bucket)
+        s3_obj.download_fileobj.assert_called_once_with(mock_temp_file)
+
+    def test_generate_presigned_url(self, s3_bucket):
+        hook = S3Hook()
+        presigned_url = hook.generate_presigned_url(client_method="get_object",
+                                                    params={'Bucket': s3_bucket,
+                                                            'Key': "my_key"})
+
+        url = presigned_url.split("?")[1]
+        params = {x[0]: x[1]
+                  for x in [x.split("=") for x in url[0:].split("&")]}
+
+        assert {"AWSAccessKeyId", "Signature", "Expires"}.issubset(set(params.keys()))
