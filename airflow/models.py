@@ -1407,14 +1407,13 @@ class TaskInstance(Base, LoggingMixin):
 
                 # If a timeout is specified for the task, make it fail
                 # if it goes beyond
-                task_timeout = task_copy.execution_timeout.total_seconds()
-                if hasattr(task_copy, 'timeout'):
-                    if isinstance(task_copy.timeout, timedelta):
-                        task_timeout = task_copy.timeout.total_seconds()
-                    else:
-                        task_timeout = task_copy.timeout
+                task_timeout = task_copy.execution_timeout
+                if hasattr(task_copy, 'timeout') and task_copy.timeout:
+                    task_timeout = task_copy.timeout
                 result = None
                 if task_timeout:
+                    if isinstance(task_timeout, timedelta):
+                        task_timeout = task_timeout.total_seconds()
                     try:
                         with timeout(int(task_timeout)):
                             result = task_copy.execute(context=context)
