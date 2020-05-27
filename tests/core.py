@@ -534,7 +534,7 @@ class CoreTest(unittest.TestCase):
             timeout=1,
             poke_interval=1,
             dag=self.dag)
-        with self.assertRaises(exceptions.AirflowSensorTimeout):
+        with self.assertRaises(exceptions.AirflowTaskTimeout):
             t2.run(start_date=DEFAULT_DATE, end_date=DEFAULT_DATE, ignore_ti_state=True)
 
     def test_external_task_sensor_error_delta_and_fn(self):
