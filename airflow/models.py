@@ -448,6 +448,9 @@ class DagBag(BaseDagBag, LoggingMixin):
 
         for file_stat in self.dagbag_stats:
             dag_ids = dags_by_name[file_stat.dags]
+
+            self.logger.info('[HACK] file: {}, duration: {}'.format(file_stat.file, file_stat.duration))
+
             if file_stat.dag_num >= 1:
                 # if we found multiple dags per file, the stat is 'dag_id1 _ dag_id2'
                 dag_names = '_'.join(dag_ids)
