@@ -835,7 +835,7 @@ class DagBagTest(unittest.TestCase):
         actual_found_dag_ids = list(map(lambda dag: dag.dag_id, actual_found_dags))
 
         for dag_id in expected_dag_ids:
-            actual_dagbag.log.info('validating %s' % dag_id)
+            logging.info('validating %s' % dag_id)
             self.assertEquals(
                 dag_id in actual_found_dag_ids, should_be_found,
                 'dag "%s" should %shave been found after processing dag "%s"' %
