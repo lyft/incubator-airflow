@@ -22,7 +22,9 @@ AIRFLOW_VAR_NAME_FORMAT_MAPPING = {
     'AIRFLOW_CONTEXT_EXECUTION_DATE': {'default': 'airflow.ctx.execution_date',
                                        'env_var_format': 'AIRFLOW_CTX_EXECUTION_DATE'},
     'AIRFLOW_CONTEXT_DAG_RUN_ID': {'default': 'airflow.ctx.dag_run_id',
-                                   'env_var_format': 'AIRFLOW_CTX_DAG_RUN_ID'}
+                                   'env_var_format': 'AIRFLOW_CTX_DAG_RUN_ID'},
+    'AIRFLOW_CONTEXT_DAGRUN_EXECUTION_DATE': {'default': 'airflow.ctx.dag_run.execution_date',
+                                              'env_var_format': 'AIRFLOW_CTX_DAGRUN_EXECUTION_DATE'}
 }
 
 
