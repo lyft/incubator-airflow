@@ -13,7 +13,6 @@
 # limitations under the License.
 #
 
-
 AIRFLOW_VAR_NAME_FORMAT_MAPPING = {
     'AIRFLOW_CONTEXT_DAG_ID': {'default': 'airflow.ctx.dag_id',
                                'env_var_format': 'AIRFLOW_CTX_DAG_ID'},
@@ -22,7 +21,13 @@ AIRFLOW_VAR_NAME_FORMAT_MAPPING = {
     'AIRFLOW_CONTEXT_EXECUTION_DATE': {'default': 'airflow.ctx.execution_date',
                                        'env_var_format': 'AIRFLOW_CTX_EXECUTION_DATE'},
     'AIRFLOW_CONTEXT_DAG_RUN_ID': {'default': 'airflow.ctx.dag_run_id',
-                                   'env_var_format': 'AIRFLOW_CTX_DAG_RUN_ID'}
+                                   'env_var_format': 'AIRFLOW_CTX_DAG_RUN_ID'},
+    'AIRFLOW_CONTEXT_DAG_OWNER': {'default': 'airflow.ctx.dag_owner',
+                                  'env_var_format': 'AIRFLOW_CTX_DAG_OWNER'},
+    'AIRFLOW_CONTEXT_DAG_EMAIL': {'default': 'airflow.ctx.dag_email',
+                                  'env_var_format': 'AIRFLOW_CTX_DAG_EMAIL'},
+    'AIRFLOW_CONTEXT_DAGRUN_EXECUTION_DATE': {'default': 'airflow.ctx.dag_run.execution_date',
+                                              'env_var_format': 'AIRFLOW_CTX_DAGRUN_EXECUTION_DATE'},
 }
 
 
@@ -43,6 +48,21 @@ def context_to_airflow_vars(context, in_env_var_format=False):
         name_format = 'env_var_format'
     else:
         name_format = 'default'
+    task = context.get('task')
+    if task and task.email:
+        if isinstance(task.email, str):
+            params[AIRFLOW_VAR_NAME_FORMAT_MAPPING['AIRFLOW_CONTEXT_DAG_EMAIL'][
+                name_format]] = task.email
+        elif isinstance(task.email, list):
+            params[AIRFLOW_VAR_NAME_FORMAT_MAPPING['AIRFLOW_CONTEXT_DAG_EMAIL'][
+                name_format]] = ','.join(task.email)
+    if task and task.owner:
+        if isinstance(task.owner, str):
+            params[AIRFLOW_VAR_NAME_FORMAT_MAPPING['AIRFLOW_CONTEXT_DAG_OWNER'][
+                name_format]] = task.owner
+        elif isinstance(task.owner, list):
+            params[AIRFLOW_VAR_NAME_FORMAT_MAPPING['AIRFLOW_CONTEXT_DAG_OWNER'][
+                name_format]] = ','.join(task.owner)
     task_instance = context.get('task_instance')
     if task_instance and task_instance.dag_id:
         params[AIRFLOW_VAR_NAME_FORMAT_MAPPING['AIRFLOW_CONTEXT_DAG_ID'][
@@ -58,4 +78,9 @@ def context_to_airflow_vars(context, in_env_var_format=False):
     if dag_run and dag_run.run_id:
         params[AIRFLOW_VAR_NAME_FORMAT_MAPPING['AIRFLOW_CONTEXT_DAG_RUN_ID'][
             name_format]] = dag_run.run_id
+    if dag_run and dag_run.execution_date:
+        params[
+            AIRFLOW_VAR_NAME_FORMAT_MAPPING['AIRFLOW_CONTEXT_DAGRUN_EXECUTION_DATE'][
+                name_format]] = dag_run.execution_date.isoformat()
+
     return params
