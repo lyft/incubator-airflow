@@ -667,7 +667,6 @@ class SchedulerJob(BaseJob):
             tasks_missed_sla = []  # type: List[TaskInstance]
             for sla in slas:
                 if sla.task_id not in dag.task_ids:
-                    session.delete(sla)
                     self.logger.warning('Skipping SLA notification as %s no longer exists in %s',
                                         sla.task_id, dag.dag_id)
                 else:

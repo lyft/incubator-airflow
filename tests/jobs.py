@@ -1960,7 +1960,7 @@ class SchedulerJobTest(unittest.TestCase):
 
         self.assertEqual(len(import_errors), 0)
 
-    def test_manage_slas_remove_tasks_no_longer_exists(self):
+    def test_manage_slas_handle_tasks_no_longer_exists(self):
         session = settings.Session()
         dag_id = 'dummy'
         task_id = 'iamghost'
@@ -1978,10 +1978,3 @@ class SchedulerJobTest(unittest.TestCase):
         scheduler = SchedulerJob(**self.default_scheduler_args)
 
         scheduler.manage_slas(dag, session=session)
-
-        cnt = session.query(models.SlaMiss).filter(
-            models.SlaMiss.dag_id == dag_id,
-            models.SlaMiss.task_id == task_id,
-        ).count()
-
-        self.assertEqual(cnt, 0)
