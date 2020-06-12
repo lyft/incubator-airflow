@@ -31,7 +31,7 @@ from airflow import AirflowException, settings, models
 from airflow.bin import cli
 from airflow.executors import SequentialExecutor
 from airflow.jobs import BackfillJob, SchedulerJob, LocalTaskJob
-from airflow.models import DAG, DagModel, DagBag, DagRun, Pool, TaskInstance as TI
+from airflow.models import DAG, DagModel, DagBag, DagRun, Pool, TaskInstance as TI, SlaMiss
 from airflow.operators.dummy_operator import DummyOperator
 from airflow.operators.bash_operator import BashOperator
 from airflow.utils.db import provide_session
@@ -1960,21 +1960,32 @@ class SchedulerJobTest(unittest.TestCase):
 
         self.assertEqual(len(import_errors), 0)
 
-    def test_manage_slas_handle_tasks_no_longer_exists(self):
+    def test_dag_file_processor_sla_miss_deleted_task(self):
+        """
+        Test that the dag file processor will not crash when trying to send
+        sla miss notification for a deleted task
+        """
         session = settings.Session()
-        dag_id = 'dummy'
-        task_id = 'iamghost'
-        sla_miss = models.SlaMiss(
-            dag_id=dag_id,
-            task_id=task_id,
-            execution_date=datetime.datetime(2020, 1, 1),
-        )
 
-        session.add(sla_miss)
-        session.commit()
+        test_start_date = datetime.datetime(2020, 1, 1)
+        dag = DAG(dag_id='test_sla_miss',
+                  default_args={'start_date': test_start_date,
+                                'sla': datetime.timedelta(days=1)})
 
-        dag = DAG('dummy', schedule_interval='@hourly', max_active_runs=1)
+        task = DummyOperator(task_id='dummy',
+                             dag=dag,
+                             owner='airflow',
+                             email='test@test.com',
+                             sla=datetime.timedelta(hours=1))
 
-        scheduler = SchedulerJob(**self.default_scheduler_args)
+        session.merge(models.TaskInstance(task=task,
+                                          execution_date=test_start_date,
+                                          state='Success'))
 
-        scheduler.manage_slas(dag, session=session)
+        # Create an SlaMiss where notification was sent, but email was not
+        session.merge(SlaMiss(task_id='dummy_deleted',
+                              dag_id='test_sla_miss',
+                              execution_date=test_start_date))
+
+        scheduler_job = SchedulerJob()
+        scheduler_job.manage_slas(dag=dag, session=session)

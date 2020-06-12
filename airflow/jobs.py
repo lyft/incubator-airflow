@@ -666,11 +666,14 @@ class SchedulerJob(BaseJob):
 
             tasks_missed_sla = []  # type: List[TaskInstance]
             for sla in slas:
-                if sla.task_id not in dag.task_ids:
-                    self.logger.warning('Skipping SLA notification as %s no longer exists in %s',
-                                        sla.task_id, dag.dag_id)
-                else:
-                    tasks_missed_sla.append(dag.get_task(sla.task_id))
+                try:
+                    task = dag.get_task(sla.task_id)
+                    tasks_missed_sla.append(task)
+                except AirflowException:
+                    # task already deleted from DAG, skip it
+                    self.log.warning(
+                        "Task %s doesn't exist in DAG anymore, skipping SLA miss notification.",
+                        sla.task_id)
 
             for t in tasks_missed_sla:
                 if t.email:
