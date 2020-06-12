@@ -671,7 +671,7 @@ class SchedulerJob(BaseJob):
                     tasks_missed_sla.append(task)
                 except AirflowException:
                     # task already deleted from DAG, skip it
-                    self.log.warning(
+                    self.logger.warning(
                         "Task %s doesn't exist in DAG anymore, skipping SLA miss notification.",
                         sla.task_id)
 
