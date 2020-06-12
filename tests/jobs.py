@@ -644,6 +644,7 @@ class SchedulerJobTest(unittest.TestCase):
         self.dagbag = DagBag()
         session = settings.Session()
         session.query(models.ImportError).delete()
+        session.query(models.SlaMiss).delete()
         session.commit()
 
     @staticmethod
@@ -1958,3 +1959,29 @@ class SchedulerJobTest(unittest.TestCase):
         import_errors = session.query(models.ImportError).all()
 
         self.assertEqual(len(import_errors), 0)
+
+    def test_manage_slas_remove_tasks_no_longer_exists(self):
+        session = settings.Session()
+        dag_id = 'dummy'
+        task_id = 'iamghost'
+        sla_miss = models.SlaMiss(
+            dag_id=dag_id,
+            task_id=task_id,
+            execution_date=datetime.datetime(2020, 1, 1),
+        )
+
+        session.add(sla_miss)
+        session.commit()
+
+        dag = DAG('dummy', schedule_interval='@hourly', max_active_runs=1)
+
+        scheduler = SchedulerJob(**self.default_scheduler_args)
+
+        scheduler.manage_slas(dag, session=session)
+
+        cnt = session.query(models.SlaMiss).filter(
+            models.SlaMiss.dag_id == dag_id,
+            models.SlaMiss.task_id == task_id,
+        ).count()
+
+        self.assertEqual(cnt, 0)
