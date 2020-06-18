@@ -3749,9 +3749,8 @@ class DAG(BaseDag, LoggingMixin):
 
         return run
 
-    @staticmethod
     @provide_session
-    def sync_to_db(dag, owner, sync_time, session=None):
+    def sync_to_db(self, owner, sync_time, session=None):
         """
         Save attributes about this DAG to the DB. Note that this method
         can be called for both DAGs and SubDAGs. A SubDag is actually a
@@ -3765,17 +3764,17 @@ class DAG(BaseDag, LoggingMixin):
         :return: None
         """
         orm_dag = session.query(
-            DagModel).filter(DagModel.dag_id == dag.dag_id).first()
+            DagModel).filter(DagModel.dag_id == self.dag_id).first()
         if not orm_dag:
-            orm_dag = DagModel(dag_id=dag.dag_id)
+            orm_dag = DagModel(dag_id=self.dag_id)
             logging.info("Creating ORM DAG for %s",
-                         dag.dag_id)
+                         self.dag_id)
             session.add(orm_dag)
-        if dag.is_subdag:
-            orm_dag.fileloc = dag.fileloc
+        if self.is_subdag:
+            orm_dag.fileloc = self.fileloc
         else:
-            orm_dag.fileloc = dag.full_filepath
-        orm_dag.is_subdag = dag.is_subdag
+            orm_dag.fileloc = self.full_filepath
+        orm_dag.is_subdag = self.is_subdag
         orm_dag.owners = owner
         orm_dag.is_active = True
         orm_dag.last_scheduler_run = sync_time
@@ -3783,8 +3782,8 @@ class DAG(BaseDag, LoggingMixin):
         orm_dag.tags = self.get_dagtags(session=session)
         session.commit()
 
-        for subdag in dag.subdags:
-            DAG.sync_to_db(subdag, owner, sync_time, session=session)
+        for subdag in self.subdags:
+            subdag.sync_to_db(owner, sync_time, session=session)
 
     @provide_session
     def get_dagtags(self, session=None):
