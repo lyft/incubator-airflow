@@ -3358,7 +3358,7 @@ class DAG(BaseDag, LoggingMixin):
             only_running=False,
             confirm_prompt=False,
             include_subdags=True,
-            reset_dag_runs=True,
+            reset_dag_runs=False,
             dry_run=False):
         """
         Clears a set of task instances associated with the current dag for
@@ -3412,11 +3412,12 @@ class DAG(BaseDag, LoggingMixin):
                 # Setting the state of DagRun to NONE instead of
                 # RUNNING to avoid reaching max_active_runs limitation
                 # during backfill.
-                self.set_dag_runs_state(session=session,
-                                        start_date=start_date,
-                                        end_date=end_date,
-                                        state=State.NONE,
-                                        )
+                self.set_dag_runs_state(
+                    session=session,
+                    start_date=start_date,
+                    end_date=end_date,
+                    state=State.NONE,
+                )
         else:
             count = 0
             print("Bail. Nothing was cleared.")

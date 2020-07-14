@@ -23,6 +23,7 @@ import os
 import unittest
 import time
 
+from parameterized import parameterized
 import six
 import re
 import urllib
@@ -244,7 +245,13 @@ class DagTest(unittest.TestCase):
             states=[None, State.QUEUED, State.RUNNING], session=session))
         session.close()
 
-    def test_clear_dag_reset_dagruns(self):
+    @parameterized.expand(
+        [
+            [True, State.NONE],
+            [False, State.RUNNING],
+        ]
+    )
+    def test_clear_dag_reset_dagruns(self, reset_dag_runs, dag_run_state):
         dag_id = 'test_clear_dag_reset_dagruns'
         task_id = 't1'
         dag = DAG(dag_id, start_date=DEFAULT_DATE, max_active_runs=1)
@@ -263,7 +270,8 @@ class DagTest(unittest.TestCase):
         session.merge(task_instance_1)
         session.commit()
 
-        dag.clear(start_date=DEFAULT_DATE, end_date=DEFAULT_DATE, reset_dag_runs=True)
+        dag.clear(start_date=DEFAULT_DATE, end_date=DEFAULT_DATE,
+                  reset_dag_runs=reset_dag_runs)
 
         dagruns = session.query(
             DagRun,
@@ -273,7 +281,7 @@ class DagTest(unittest.TestCase):
 
         self.assertEqual(len(dagruns), 1)
         dagrun = dagruns[0]  # type: DagRun
-        self.assertEqual(dagrun.state, State.NONE)
+        self.assertEqual(dagrun.state, dag_run_state)
 
         task_instances = session.query(
             DagRun,
