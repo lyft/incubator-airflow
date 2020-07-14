@@ -283,15 +283,44 @@ class DagTest(unittest.TestCase):
         dagrun = dagruns[0]  # type: DagRun
         self.assertEqual(dagrun.state, dag_run_state)
 
+    @parameterized.expand([
+        (state, State.NONE)
+        for state in State.task_states if state != State.RUNNING
+    ] + [(State.RUNNING, State.SHUTDOWN)])
+    def test_clear_dag(self, ti_state_begin, ti_state_end):
+        dag_id = 'test_clear_dag'
+        task_id = 't1'
+        dag = DAG(dag_id, start_date=DEFAULT_DATE, max_active_runs=1)
+        t_1 = DummyOperator(task_id=task_id, dag=dag)
+
+        session = settings.Session()
+        dagrun_1 = dag.create_dagrun(
+            run_id=DagRun.ID_PREFIX,
+            state=State.RUNNING,
+            start_date=DEFAULT_DATE,
+            execution_date=DEFAULT_DATE,
+        )
+        session.merge(dagrun_1)
+
+        task_instance_1 = TI(t_1, execution_date=DEFAULT_DATE, state=ti_state_begin)
+        task_instance_1.job_id = 123
+        session.merge(task_instance_1)
+        session.commit()
+
+        dag.clear(
+            start_date=DEFAULT_DATE,
+            end_date=DEFAULT_DATE + datetime.timedelta(days=1),
+        )
+
         task_instances = session.query(
-            DagRun,
+            TI,
         ).filter(
-            DagRun.dag_id == dag_id,
+            TI.dag_id == dag_id,
         ).all()
 
         self.assertEqual(len(task_instances), 1)
         task_instance = task_instances[0]  # type: TI
-        self.assertEqual(task_instance.state, State.NONE)
+        self.assertEqual(task_instance.state, ti_state_end)
 
     def test_render_template_field(self):
         """Tests if render_template from a field works"""
