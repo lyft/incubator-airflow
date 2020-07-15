@@ -286,7 +286,7 @@ class DagTest(unittest.TestCase):
     @parameterized.expand([
         (state, State.NONE)
         for state in State.task_states if state != State.RUNNING
-    ] + [(State.RUNNING, State.SHUTDOWN)])
+    ])
     def test_clear_dag(self, ti_state_begin, ti_state_end):
         dag_id = 'test_clear_dag'
         task_id = 't1'
@@ -318,9 +318,7 @@ class DagTest(unittest.TestCase):
             TI.dag_id == dag_id,
         ).all()
 
-        self.assertEqual(len(task_instances), 1)
-        task_instance = task_instances[0]  # type: TI
-        self.assertEqual(task_instance.state, ti_state_end)
+        self.assertEqual(len(task_instances), 0)
 
     def test_render_template_field(self):
         """Tests if render_template from a field works"""
