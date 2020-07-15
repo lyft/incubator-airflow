@@ -1061,7 +1061,9 @@ class Airflow(BaseView):
             count = dag.clear(
                 start_date=start_date,
                 end_date=end_date,
-                include_subdags=recursive)
+                include_subdags=recursive,
+                reset_dag_runs=False,
+            )
 
             flash("{0} task instances have been cleared".format(count))
 
