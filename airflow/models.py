@@ -3616,6 +3616,9 @@ class DAG(BaseDag, LoggingMixin):
         elif task.end_date and self.end_date:
             task.end_date = min(task.end_date, self.end_date)
 
+        if not task.owner and 'owner' in self.default_args:
+            task.owner = self.default_args['owner']
+
         if task.task_id in self.task_dict:
             # TODO: raise an error in Airflow 2.0
             warnings.warn(
