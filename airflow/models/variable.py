@@ -25,13 +25,14 @@ from sqlalchemy import Column, Integer, String, Text, Boolean
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import synonym
 
+from airflow import conf
 from airflow.models.base import Base, ID_LEN
 from airflow.models.crypto import get_fernet, InvalidFernetToken
 from airflow.utils.db import provide_session
 from airflow.utils.log.logging_mixin import LoggingMixin
 
 
-class Variable(Base, LoggingMixin):
+class BaseVariable(Base, LoggingMixin):
     __tablename__ = "variable"
     __NO_DEFAULT_SENTINEL = object()
 
@@ -90,11 +91,11 @@ class Variable(Base, LoggingMixin):
             and un-encode it when retrieving a value
         :return: Mixed
         """
-        obj = Variable.get(key, default_var=None,
-                           deserialize_json=deserialize_json)
+        obj = BaseVariable.get(key, default_var=None,
+                               deserialize_json=deserialize_json)
         if obj is None:
             if default is not None:
-                Variable.set(key, default, serialize_json=deserialize_json)
+                BaseVariable.set(key, default, serialize_json=deserialize_json)
                 return default
             else:
                 raise ValueError('Default Value must be set')
@@ -137,8 +138,8 @@ class Variable(Base, LoggingMixin):
         else:
             stored_value = str(value)
 
-        Variable.delete(key, session=session)
-        session.add(Variable(key=key, val=stored_value))  # type: ignore
+        BaseVariable.delete(key, session=session)
+        session.add(BaseVariable(key=key, val=stored_value))  # type: ignore
         session.flush()
 
     @classmethod
@@ -150,3 +151,20 @@ class Variable(Base, LoggingMixin):
         fernet = get_fernet()
         if self._val and self.is_encrypted:
             self._val = fernet.rotate(self._val.encode('utf-8')).decode()
+
+
+def resolve_variable_backend():
+    """Resolves custom Variable class"""
+    clazz = conf.getimport("core", "variable_backend",
+                           fallback="airflow.models.variable.{}".format(BaseVariable.__name__))
+    if clazz:
+        if not issubclass(clazz, BaseVariable):
+            raise TypeError(
+                "Your custom Variable class `{}` ".format(clazz.__name__),
+                "is not a subclass of `{}`.".format(BaseVariable.__name__)
+            )
+        return clazz
+    return BaseVariable
+
+
+Variable = resolve_variable_backend()

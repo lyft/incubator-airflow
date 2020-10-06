@@ -41,6 +41,7 @@ from zope.deprecation import deprecated
 
 from airflow.exceptions import AirflowConfigException
 from airflow.utils.log.logging_mixin import LoggingMixin
+from airflow.utils.module_loading import import_string
 
 standard_library.install_aliases()
 
@@ -342,6 +343,27 @@ class AirflowConfigParser(ConfigParser):
 
     def getfloat(self, section, key, **kwargs):
         return float(self.get(section, key, **kwargs))
+
+    def getimport(self, section, key, **kwargs):  # noqa
+        """
+        Reads options, imports the full qualified name, and returns the object.
+
+        In case of failure, it throws an exception a clear message with the key aad the section names
+
+        :return: The object or None, if the option is empty
+        """
+        full_qualified_path = conf.get(section=section, key=key, **kwargs)
+        if not full_qualified_path:
+            return None
+
+        try:
+            return import_string(full_qualified_path)
+        except ImportError as e:
+            log.error(e)
+            raise AirflowConfigException(
+                'The object could not be loaded. Please check "{}" key in "{}" section. '.format(key, section),
+                'Current value: "{}".'.format(full_qualified_path),
+            )
 
     def read(self, filenames, **kwargs):
         super(AirflowConfigParser, self).read(filenames, **kwargs)
