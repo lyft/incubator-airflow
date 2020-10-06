@@ -18,12 +18,27 @@
 # under the License.
 
 import unittest
+from typing import Any
 
 from cryptography.fernet import Fernet
 
 from airflow import settings
 from airflow.models import crypto, Variable
+from airflow.models.variable import BaseVariable, resolve_variable_backend
 from tests.test_utils.config import conf_vars
+
+
+class CustomVariable(BaseVariable):
+
+    @classmethod
+    def get(
+        cls,
+        key: str,
+        default_var: Any = None,
+        deserialize_json: bool = False,
+        session=None,
+    ):
+        return 'override'
 
 
 class VariableTest(unittest.TestCase):
@@ -80,3 +95,19 @@ class VariableTest(unittest.TestCase):
             self.assertTrue(test_var.is_encrypted)
             self.assertEqual(test_var.val, 'value')
             self.assertEqual(Fernet(key2).decrypt(test_var._val.encode()), b'value')
+
+    @conf_vars(
+        {('core', 'variable_backend'): 'tests.models.test_variable.CustomVariable'}
+    )
+    def test_resolve_variable_backend(self):
+        cls = resolve_variable_backend()
+        assert issubclass(cls, CustomVariable)
+        assert cls.get('') == 'override'
+
+    @conf_vars(
+        {('core', 'variable_backend'): ''}
+    )
+    def test_resolve_variable_backend_fallback_to_base_variable(self):
+        cls = resolve_variable_backend()
+        assert issubclass(cls, BaseVariable)
+        assert cls.get('', default_var='default') == 'default'

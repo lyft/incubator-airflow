@@ -361,8 +361,8 @@ class AirflowConfigParser(ConfigParser):
         except ImportError as e:
             log.error(e)
             raise AirflowConfigException(
-                f'The object could not be loaded. Please check "{key}" key in "{section}" section. '
-                f'Current value: "{full_qualified_path}".'
+                'The object could not be loaded. Please check "{}" key in "{}" section. '.format(key, section),
+                'Current value: "{}".'.format(full_qualified_path),
             )
 
     def read(self, filenames, **kwargs):

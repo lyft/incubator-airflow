@@ -156,12 +156,12 @@ class BaseVariable(Base, LoggingMixin):
 def resolve_variable_backend():
     """Resolves custom Variable class"""
     clazz = conf.getimport("core", "variable_backend",
-                           fallback=f"airflow.models.variable.{BaseVariable.__name__}")
+                           fallback="airflow.models.variable.{}".format(BaseVariable.__name__))
     if clazz:
         if not issubclass(clazz, BaseVariable):
             raise TypeError(
-                f"Your custom Variable class `{clazz.__name__}` "
-                f"is not a subclass of `{BaseVariable.__name__}`."
+                "Your custom Variable class `{}` ".format(clazz.__name__),
+                "is not a subclass of `{}`.".format(BaseVariable.__name__)
             )
         return clazz
     return BaseVariable
