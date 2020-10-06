@@ -18,7 +18,7 @@
 # under the License.
 
 import unittest
-from typing import Any
+from typing import Any, Optional
 
 from cryptography.fernet import Fernet
 
@@ -33,11 +33,12 @@ class CustomVariable(BaseVariable):
     @classmethod
     def get(
         cls,
-        key: str,
-        default_var: Any = None,
-        deserialize_json: bool = False,
+        key,
+        default_var=None,
+        deserialize_json=False,
         session=None,
     ):
+        # type: (str, Any, bool, Optional[Any]) -> Any
         return 'override'
 
 
