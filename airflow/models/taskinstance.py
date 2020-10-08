@@ -1279,6 +1279,9 @@ class TaskInstance(Base, LoggingMixin):
             self.overwrite_params_with_dag_run_conf(params=params, dag_run=dag_run)
 
         class VariableAccessor:
+
+            __NO_DEFAULT_SENTINEL = object()
+
             """
             Wrapper around Variable. This way you can get variables in
             templates by using ``{{ var.value.variable_name }}`` or
@@ -1300,11 +1303,13 @@ class TaskInstance(Base, LoggingMixin):
             @staticmethod
             def get(
                 item,
-                default_var=Variable._Variable__NO_DEFAULT_SENTINEL,
+                default_var=__NO_DEFAULT_SENTINEL,
             ):
                 return Variable.get(item, default_var=default_var)
 
         class VariableJsonAccessor:
+            __NO_DEFAULT_SENTINEL = object()
+
             """
             Wrapper around Variable. This way you can get variables in
             templates by using ``{{ var.json.variable_name }}`` or
@@ -1326,7 +1331,7 @@ class TaskInstance(Base, LoggingMixin):
             @staticmethod
             def get(
                 item,
-                default_var=Variable._Variable__NO_DEFAULT_SENTINEL,
+                default_var=__NO_DEFAULT_SENTINEL,
             ):
                 return Variable.get(item, default_var=default_var, deserialize_json=True)
 
