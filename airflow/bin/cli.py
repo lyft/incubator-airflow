@@ -1844,7 +1844,7 @@ def sync_perm(args): # noqa
 
 @cli_utils.action_logging
 def sync_to_db(args): # noqa
-    dagbag = DagBag(settings.DAGS_FOLDER, store_serialized_dags=settings.STORE_SERIALIZED_DAGS)
+    dagbag = DagBag(settings.DAGS_FOLDER, store_serialized_dags=False)
     for dag in dagbag.dags.values():
         dag.sync_to_db()
 
