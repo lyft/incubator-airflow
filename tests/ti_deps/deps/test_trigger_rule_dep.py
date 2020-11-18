@@ -25,6 +25,7 @@ from airflow.utils.trigger_rule import TriggerRule
 from airflow.ti_deps.deps.trigger_rule_dep import TriggerRuleDep
 from airflow.utils.db import create_session
 from airflow.utils.state import State
+from mock import Mock
 
 
 class TriggerRuleDepTest(unittest.TestCase):
