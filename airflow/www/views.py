@@ -69,6 +69,7 @@ from airflow import settings
 from airflow.exceptions import AirflowException
 from airflow.settings import Session
 from airflow.models import XCom, DagRun
+from airflow.models import Variable
 from airflow.ti_deps.dep_context import DepContext, QUEUE_DEPS, SCHEDULER_DEPS
 
 from airflow.models import BaseOperator
@@ -111,6 +112,7 @@ DEFAULT_SENSITIVE_VARIABLE_FIELDS = (
     'apikey',
     'access_token',
 )
+MIGRATED_DAGS_VARIABLE = "migrated_dags_list"
 
 if conf.getboolean('webserver', 'FILTER_BY_OWNER'):
     # filter_by_owner if authentication is enabled and filter_by_owner is true
@@ -1176,6 +1178,13 @@ class Airflow(BaseView):
         blur = conf.getboolean('webserver', 'demo_mode')
         dag = dagbag.get_dag(dag_id)
         root = request.args.get('root')
+
+        migrated_dags = Variable.get(MIGRATED_DAGS_VARIABLE, default_var=[], deserialize_json=True)
+        file_location = dag.file_loc
+        for dag_loc in migrated_dags:
+            if dag_loc in file_location:
+                return redirect("https://airflow.lyft.net/tree?dag_id={dag_id}}&root=".format(dag_id=dag_id))
+
         if root:
             dag = dag.sub_dag(
                 task_regex=root,
@@ -1303,6 +1312,13 @@ class Airflow(BaseView):
         dag_id = request.args.get('dag_id')
         blur = conf.getboolean('webserver', 'demo_mode')
         dag = dagbag.get_dag(dag_id)
+
+        migrated_dags = Variable.get(MIGRATED_DAGS_VARIABLE, default_var=[], deserialize_json=True)
+        file_location = dag.file_loc
+        for dag_loc in migrated_dags:
+            if dag_loc in file_location:
+                return redirect("https://airflow.lyft.net/graph?dag_id={dag_id}}&root=".format(dag_id=dag_id))
+
         if dag_id not in dagbag.dags:
             flash('DAG "{0}" seems to be missing.'.format(dag_id), "error")
             return redirect('/admin/')
