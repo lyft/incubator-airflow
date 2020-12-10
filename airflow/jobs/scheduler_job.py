@@ -1471,6 +1471,7 @@ class SchedulerJob(BaseJob):
             self.log.debug(
                 "Ran scheduling loop in %.2f seconds",
                 loop_duration)
+            Stats.timing('scheduler.loop_duration_sec', loop_duration)
 
             if not is_unit_test:
                 self.log.debug("Sleeping for %.2f seconds", self._processor_poll_interval)
