@@ -923,8 +923,6 @@ class TaskInstance(Base, LoggingMixin):
         actual_start_date = timezone.utcnow()
         try:
             if not mark_success:
-                context = self.get_template_context()
-
                 task_copy = copy.copy(task)
 
                 # Sensors in `poke` mode can block execution of DAGs when running
@@ -948,7 +946,9 @@ class TaskInstance(Base, LoggingMixin):
 
                 start_time = time.time()
 
+                context = self.get_template_context()
                 self.render_templates(context=context)
+
                 task_copy.pre_execute(context=context)
 
                 # If a timeout is specified for the task, make it fail
