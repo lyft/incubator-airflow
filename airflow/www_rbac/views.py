@@ -68,7 +68,7 @@ from airflow.utils.state import State
 from airflow._vendor import nvd3
 from airflow.www_rbac import utils as wwwutils
 from airflow.www_rbac.app import app, appbuilder
-from airflow.www_rbac.decorators import action_logging, gzipped, has_dag_access
+from airflow.www_rbac.decorators import action_logging, gzipped, has_dag_access, has_dag_access_ti
 from airflow.www_rbac.forms import (DateTimeForm, DateTimeWithNumRunsForm,
                                     DateTimeWithNumRunsWithDagRunsForm,
                                     DagRunForm, ConnectionForm)
@@ -2647,28 +2647,28 @@ class TaskInstanceModelView(AirflowModelView):
             flash('Failed to set state', 'error')
 
     @action('set_running', "Set state to 'running'", '', single=False)
-    @has_dag_access(can_dag_edit=True)
+    @has_dag_access_ti(can_dag_edit=True)
     def action_set_running(self, tis):
         self.set_task_instance_state(tis, State.RUNNING)
         self.update_redirect()
         return redirect(self.get_redirect())
 
     @action('set_failed', "Set state to 'failed'", '', single=False)
-    @has_dag_access(can_dag_edit=True)
+    @has_dag_access_ti(can_dag_edit=True)
     def action_set_failed(self, tis):
         self.set_task_instance_state(tis, State.FAILED)
         self.update_redirect()
         return redirect(self.get_redirect())
 
     @action('set_success', "Set state to 'success'", '', single=False)
-    @has_dag_access(can_dag_edit=True)
+    @has_dag_access_ti(can_dag_edit=True)
     def action_set_success(self, tis):
         self.set_task_instance_state(tis, State.SUCCESS)
         self.update_redirect()
         return redirect(self.get_redirect())
 
     @action('set_retry', "Set state to 'up_for_retry'", '', single=False)
-    @has_dag_access(can_dag_edit=True)
+    @has_dag_access_ti(can_dag_edit=True)
     def action_set_retry(self, tis):
         self.set_task_instance_state(tis, State.UP_FOR_RETRY)
         self.update_redirect()

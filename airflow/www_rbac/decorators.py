@@ -125,3 +125,46 @@ def has_dag_access(**dag_kwargs):
                                         __class__.__name__ + ".login"))
         return wrapper
     return decorator
+
+def has_dag_access_ti(**dag_kwargs):
+    """
+    Decorator to check whether the user has read / write permission on the dag.
+    """
+    def decorator(f):
+        @functools.wraps(f)
+        def wrapper(self, *args, **kwargs):
+            has_access = self.appbuilder.sm.has_access
+            tis = args[0]
+            # if it is false, we need to check whether user has write access on the dag
+            can_dag_edit = dag_kwargs.get('can_dag_edit', False)
+            dag_ids = []
+            for ti in tis:
+                dag_ids.append(ti.dag_id)
+
+            # 1. check whether the user has can_dag_edit permissions on all_dags
+            # 2. if 1 false, check whether the user
+            #    has can_dag_edit permissions on the dag
+            # 3. if 2 false, check whether it is can_dag_read view,
+            #    and whether user has the permissions
+
+            if has_access('can_dag_edit', 'all_dags') or (not can_dag_edit and
+                  (has_access('can_dag_read','all_dags'))):
+                return f(self, *args, **kwargs)
+
+            failed_on = set()
+
+            for dag_id in dag_ids:
+                if not (
+                    has_access('can_dag_edit', dag_id) or (not can_dag_edit and
+                                                           (has_access('can_dag_read',
+                                                                       dag_id)))):
+                    failed_on.add(dag_id)
+
+            if len(failed_on) == 0:
+                return f(self, *args, **kwargs)
+            else:
+                flash("Access is Denied due to lack of permmissions on dag_id(s): {}".format(failed_on), "danger")
+                return redirect(url_for(self.appbuilder.sm.auth_view.
+                                        __class__.__name__ + ".login"))
+        return wrapper
+    return decorator
