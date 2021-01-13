@@ -24,7 +24,7 @@ Example DAG demonstrating a workflow with nested branching. The join tasks are c
 
 from airflow.models import DAG
 from airflow.operators.dummy_operator import DummyOperator
-from airflow.operators.python import BranchPythonOperator
+from airflow.operators.python_operator import BranchPythonOperator
 from airflow.utils.dates import days_ago
 
 with DAG(dag_id="example_nested_branch_dag", start_date=days_ago(2), schedule_interval="@daily") as dag:
