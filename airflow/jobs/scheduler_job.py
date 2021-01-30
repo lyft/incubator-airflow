@@ -805,7 +805,11 @@ class SchedulerJob(BaseJob):
             # every task (in ti.is_runnable). This is also called in
             # update_state above which has already checked these tasks
             for ti in tis:
-                task = dag.get_task(ti.task_id)
+                try:
+                    task = dag.get_task(ti.task_id)
+                except TaskNotFound as e:
+                    self.log.exception('Failed to find corresponding tasks: %s', ti.task_id)
+                    continue
 
                 # fixme: ti.task is transient but needs to be set
                 ti.task = task
